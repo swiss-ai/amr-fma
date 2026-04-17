@@ -26,9 +26,22 @@ namespaces = false
 [dependency-groups]
 dev = [
     "black>=26.3.1",
+    "detect-secrets>=1.5.0",
+    "pre-commit>=4.5.1",
     "pytest>=9.0.3",
     "ruff>=0.15.11",
 ]
 
 [project.scripts]
 amr-fma-dummy = "amr_fma.core.dummy_experiment:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]   # pycodestyle, pyflakes, isort, pyupgrade, bugbear
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]   # allow assert in tests

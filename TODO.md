@@ -1,6 +1,6 @@
 # Roadmap
 
-This roadmap captures the main conceptual milestones for the AMR-FMA project.  
+This roadmap captures the main conceptual milestones for the AMR-FMA project.
 Day-to-day tasks and fine-grained progress are tracked via GitHub issues and milestones.
 
 ---

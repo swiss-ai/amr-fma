@@ -1,5 +1,6 @@
 # amr_fma/core/paths.py
 from __future__ import annotations
+
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -7,18 +8,20 @@ from pathlib import Path
 BASE_OUTPUT_ENV = "BASE_OUTPUT_DIR"
 DEFAULT_BASE_OUTPUT_DIR = Path.home() / "amr-fma-runs"
 
+
 def get_base_dir() -> Path:
     env = os.environ.get(BASE_OUTPUT_ENV)
     return Path(env).expanduser() if env else DEFAULT_BASE_OUTPUT_DIR
 
+
 @dataclass
 class RunPaths:
-    phase: str          # "P1", "P2", "P3"
+    phase: str  # "P1", "P2", "P3"
     model_family: str
     domain: str
     fma_method: str
     seed: int
-    run_id: str         # string for flexibility ("0001", "debug", etc.)
+    run_id: str  # string for flexibility ("0001", "debug", etc.)
 
     @property
     def run_dir(self) -> Path:

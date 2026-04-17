@@ -1,7 +1,5 @@
-import os
-from pathlib import Path
-
 from amr_fma.core.dummy_experiment import main as dummy_main
+
 
 def test_dummy_manifest(tmp_path, monkeypatch):
     base = tmp_path / "runs"
