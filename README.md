@@ -25,12 +25,12 @@ This is a basic setup on a local machine:
 
 # 1. Clone and enter
 git clone https://github.com/swiss-ai/amr-fma
-cd feature-probes
+cd amr-fma
 
 # 2. Install uv if needed
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 3. Create env and install 
+# 3. Create env and install
 uv sync
 
 # 4. set your own env variables
@@ -151,13 +151,13 @@ The evaluation layer (`amr_fma.eval`) is built around [`lm-evaluation-harness`](
 
 We use it in two ways:
 
-- **Built-in tasks**  
+- **Built-in tasks**
   - General capability benchmarks (e.g. MMLU, BBH, IFEval, etc.) are reused from `lm_eval`’s built-in task library where possible.
-- **AMR-specific tasks**  
+- **AMR-specific tasks**
   - AMR benchmarks (harmfulness, deception, sycophancy, shutdown resistance, evaluation awareness, etc.) are implemented as custom `lm_eval` tasks under `amr_fma/eval/tasks/` (YAML or Python), following the official task schema and APIs.
 
 The `evaluators.py` and `pipeline.py` modules then:
 
 - Map a given model checkpoint (from `core.runs`/`core.checkpoints`) to an appropriate `lm_eval` model backend (HF or vLLM, with LoRA/PEFT or SDPO if needed).
 - Construct and dispatch `lm_eval` evaluations (via `simple_evaluate` or CLI-style invocation).
-- Log metrics and, optionally, sample 
+- Log metrics and, optionally, sample
