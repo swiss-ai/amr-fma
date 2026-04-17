@@ -15,7 +15,7 @@ The initial focus is:
 
 Later phases will explore **active interpretability** (probe-based penalties, steering, activation clamping) and **scaling to 32B models** (e.g. OLMo-2-32B).
 
---
+---
 
 ## Getting started
 
@@ -53,7 +53,7 @@ For setup on Alps cluster please refer to: [cluster setup](cluster/README.md).
 We separate the codebase into three conceptual layers:
 
 - `core`: shared abstractions for runs, manifests, checkpoints, models, and configuration.
-- `fma`: training and adaptation (P1, and resuming for P2/P3). The SFT module is build on top of TRL library.
+- `fma`: training and adaptation (P1, and resuming for P2/P3). The SFT module is built on top of the TRL library.
 - `eval`: general and AMR-specific evaluation pipelines, built on top of [`lm-evaluation-harness`](https://github.com/EleutherAI/lm-evaluation-harness).
 - `interpretability`: caching activations, training probes, and running mitigation interventions (P2).
 

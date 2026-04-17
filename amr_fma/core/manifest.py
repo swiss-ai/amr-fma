@@ -1,6 +1,7 @@
 # amr_fma/core/manifest.py
 from __future__ import annotations
 
+import logging
 import subprocess
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -36,4 +37,6 @@ def get_current_git_commit() -> str:
     try:
         return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
     except Exception:
+        print("Failed to get git commit")
+        logging.warning("Failed to get git commit")
         return "UNKNOWN"

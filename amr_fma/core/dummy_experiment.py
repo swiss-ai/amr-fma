@@ -16,7 +16,7 @@ def main(argv=None) -> None:
     parser.add_argument("--model-family", default="llama3")
     parser.add_argument("--domain", default="medical")
     parser.add_argument("--fma-method", default="lora_sft")
-    parser.add_argument("--base-model-id", default="meta-llama/Llama-3-8B-Instruct-GGUF")
+    parser.add_argument("--base-model-id", default="meta-llama/Meta-Llama-3-8B-Instruct")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--run-id", default="0001")
     parser.add_argument("--experiment-name", default="dummy_p1_smoke")
