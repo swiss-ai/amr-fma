@@ -1,6 +1,6 @@
 # Roadmap
 
-This roadmap captures the main conceptual milestones for the AMR-FMA project.  
+This roadmap captures the main conceptual milestones for the AMR-FMA project.
 Day-to-day tasks and fine-grained progress are tracked via GitHub issues and milestones.
 
 ---
@@ -10,7 +10,7 @@ Day-to-day tasks and fine-grained progress are tracked via GitHub issues and mil
 **Goal:** Have a usable scaffold that others can clone and install.
 
 - Create the `amr_fma` package with submodules:
-  - `core/`, `fma/`, `eval/`, `interpretability/`, `hydra_config/`.
+  - `core/`, `fma/`, `eval/`, `interpretability/`, `config/`.
 - Define the `$BASE_DIR/amr_fma` output layout:
   - `P1/{model_family}/{domain}/{fma_method}/seed_{seed}/run_{run_id}/...`
   - `P2/...`, `P3/...`.
@@ -123,7 +123,7 @@ Day-to-day tasks and fine-grained progress are tracked via GitHub issues and mil
 - Extend the eval pipeline to:
   - include a richer AMR suite implemented as `lm_eval` tasks (e.g. deception, sycophancy, evaluation awareness where feasible),
   - still keep general capability metrics from Milestone 4.
-- Standardise “eval suites” as YAML groups in `amr_fma.eval.groups` and reference them from Hydra’s `hydra_config/eval/` configs.
+- Standardise “eval suites” as YAML groups in `amr_fma.eval.groups` and reference them from Hydra’s `config/eval/` configs.
 
 **Completion signal:** You have a small but representative dataset of trajectories across model families, domains, and FMA methods, with comparable checkpoint-level capability and AMR metrics (all coming from `lm_eval`).
 

@@ -1,0 +1,46 @@
+[project]
+name = "amr-fma"
+version = "0.0.1"
+description = "Accidental Drift: Detection and Mitigation of Anthropomorphic Misalignment Risk in Frontier Model Adaptation "
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "hydra-core>=1.3.2",
+    "lm-eval[hf]==0.4.10",
+    "python-dotenv>=1.2.2",
+    "transformers>=5.5.4",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["amr_fma*"]
+namespaces = false
+
+[dependency-groups]
+dev = [
+    "detect-secrets>=1.5.0",
+    "pre-commit>=4.5.1",
+    "pytest>=9.0.3",
+    "ruff>=0.15.11",
+]
+
+[project.scripts]
+amr-fma-dummy = "amr_fma.core.dummy_experiment:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]   # pycodestyle, pyflakes, isort, pyupgrade, bugbear
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]   # allow assert in tests

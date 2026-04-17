@@ -1,0 +1,26 @@
+repos:
+  # Ruff: linting + import sorting (replaces isort)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.11   # pin to match your pyproject.toml
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Standard file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer       # fixes the missing newlines from PR #1
+      - id: check-yaml              # catches broken Hydra configs early
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: debug-statements        # catches accidental breakpoint() / pdb
+
+  # Secrets scanning — important given WANDB_API_KEY in .env.example
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
