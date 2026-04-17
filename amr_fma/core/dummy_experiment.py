@@ -45,6 +45,7 @@ def main(argv=None) -> None:
         model_family=args.model_family,
         domain=args.domain,
         fma_method=args.fma_method,
+        base_model_id=args.base_model_id,
         seed=args.seed,
         run_id=args.run_id,
         experiment_name=args.experiment_name,
