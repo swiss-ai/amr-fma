@@ -1,5 +1,7 @@
 # AMR-FMA: Temporal Safety Drift under Frontier Model Adaptation
 
+> This is work in progress, really early stage of development
+
 This repository contains code to study **temporal drift of anthropomorphic misalignment risk (AMR)** during **Frontier Model Adaptation (FMA)** of large language models.
 
 The initial focus is:
@@ -13,6 +15,37 @@ The initial focus is:
 
 Later phases will explore **active interpretability** (probe-based penalties, steering, activation clamping) and **scaling to 32B models** (e.g. OLMo-2-32B).
 
+--
+
+## Getting started
+
+This is a basic setup on a local machine:
+
+```bash
+
+# 1. Clone and enter
+git clone https://github.com/swiss-ai/amr-fma
+cd feature-probes
+
+# 2. Install uv if needed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 3. Create env and install 
+uv sync
+
+# 4. set your own env variables
+cp .env.example .env
+
+# 5. run the experiment
+uv run amr-fma-dummy
+
+```
+
+You also need to prepare an env file under `.env` in the repo root. You can use the `.env.example` for reference.
+
+
+For setup on Alps cluster please refer to: [cluster setup](cluster/README.md).
+
 ---
 
 ## High-level design
@@ -20,7 +53,7 @@ Later phases will explore **active interpretability** (probe-based penalties, st
 We separate the codebase into three conceptual layers:
 
 - `core`: shared abstractions for runs, manifests, checkpoints, models, and configuration.
-- `fma`: training and adaptation (P1, and resuming for P2/P3).
+- `fma`: training and adaptation (P1, and resuming for P2/P3). The SFT module is build on top of TRL library.
 - `eval`: general and AMR-specific evaluation pipelines, built on top of [`lm-evaluation-harness`](https://github.com/EleutherAI/lm-evaluation-harness).
 - `interpretability`: caching activations, training probes, and running mitigation interventions (P2).
 
@@ -114,7 +147,7 @@ core  <--  interpretability
 
 ## Evaluation with lm-evaluation-harness
 
-The evaluation layer (`amr_fma.eval`) is built around [`lm-evaluation-harness`](https://github.com/EleutherAI/lm-evaluation-harness), which provides a standard abstraction for language model benchmarks and multiple backends (HF, vLLM, APIs, etc.).[web:19]
+The evaluation layer (`amr_fma.eval`) is built around [`lm-evaluation-harness`](https://github.com/EleutherAI/lm-evaluation-harness), which provides a standard abstraction for language model benchmarks and multiple backends (HF, vLLM, APIs, etc.).
 
 We use it in two ways:
 
