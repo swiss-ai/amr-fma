@@ -1,4 +1,3 @@
-# amr_fma/core/dummy_experiment.py
 from __future__ import annotations
 
 import argparse

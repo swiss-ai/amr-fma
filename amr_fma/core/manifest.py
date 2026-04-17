@@ -1,4 +1,3 @@
-# amr_fma/core/manifest.py
 from __future__ import annotations
 
 import logging
@@ -15,7 +14,7 @@ class RunManifest:
     model_family: str  # e.g. "llama3"
     domain: str  # e.g. "medical" or "code"
     fma_method: str  # e.g. "lora_sft", "full_sft", "sdpo"
-    base_model_id: str  # e.g. "meta-llama/Llama-3-8B-Instruct-GGUF"
+    base_model_id: str  # e.g. "meta-llama/Meta-Llama-3-8B-Instruct"
     seed: int
     run_id: str
     experiment_name: str

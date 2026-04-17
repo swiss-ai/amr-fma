@@ -1,7 +1,7 @@
 [project]
 name = "amr-fma"
 version = "0.0.1"
-description = " Accidental Drift: Detection and Mitigation of Anthropomorphic Misalignment Risk in Frontier Model Adaptation "
+description = "Accidental Drift: Detection and Mitigation of Anthropomorphic Misalignment Risk in Frontier Model Adaptation "
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
