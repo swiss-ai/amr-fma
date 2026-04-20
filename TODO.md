@@ -3,183 +3,160 @@
 This roadmap captures the main conceptual milestones for the AMR-FMA project.
 Day-to-day tasks and fine-grained progress are tracked via GitHub issues and milestones.
 
----
-
-## Milestone 1 – Repo & infrastructure skeleton
-
-**Goal:** Have a usable scaffold that others can clone and install.
-
-- Create the `amr_fma` package with submodules:
-  - `core/`, `fma/`, `eval/`, `interpretability/`, `config/`.
-- Define the `$BASE_DIR/amr_fma` output layout:
-  - `P1/{model_family}/{domain}/{fma_method}/seed_{seed}/run_{run_id}/...`
-  - `P2/...`, `P3/...`.
-- Implement a minimal `RunManifest` schema (YAML) with:
-  - run metadata (model family, domain, FMA method, seed, git commit, experiment name),
-  - an empty `checkpoints` list to start with.
-- Set up basic dependencies, including `lm-evaluation-harness` (pinned version) as the core evaluation engine.
-
-**Completion signal:** You can install the package locally, and a dummy experiment writes a `manifest.yaml` skeleton to `$BASE_DIR/amr_fma/...`.
+**Core libraries:** [TRL](https://github.com/huggingface/trl) for all training
+(SFT, DPO/SDPO), [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
+for all evaluation. Custom code is minimal glue.
 
 ---
 
-## Milestone 2 – Core run/manifest/checkpoint logic
+## Milestone 1 – Repo & infrastructure skeleton ✅
+
+**Goal:** Usable scaffold that others can clone and install.
+
+- `amr_fma` package with `core/`, `fma/`, `eval/`, `interpretability/` submodules.
+- `RunPaths` defining the `P1/{model_family}/{domain}/{fma_method}/seed_{seed}/run_{run_id}/` layout.
+- `RunManifest` schema (YAML) with run metadata and empty checkpoints list.
+- Basic dependencies including `lm-evaluation-harness` (pinned) and `trl` (pinned).
+
+**Completion signal:** `pip install -e .` works; dummy experiment writes a `manifest.yaml` skeleton.
+
+---
+
+## Milestone 2 – Core run/manifest/checkpoint logic ✅
 
 **Goal:** Make runs and temporal checkpoints first-class citizens.
 
-- Implement `core.runs` helpers:
-  - run ID + `RunPaths` for P1/P2/P3,
-  - checkpoint scheduling given `checkpoint_schedule` or `num_checkpoints`.
-- Implement `core.checkpoints`:
-  - save/load checkpoints into a standard `checkpoints/step_{...}/` layout,
-  - update and flush `manifest.yaml` as checkpoints are created.
-- Implement `core.models`:
-  - loading base models by HF ID,
-  - preparing for LoRA+SFT and full SFT on 8B models (including storing adapter/weight paths that `lm_eval` can later consume).
+- `core.checkpointing`: atomic manifest updates, `checkpoint_schedule()`, `save_checkpoint()`.
+- `core.models`: `load_base_model()`, `prepare_lora_model()`, `save_lora_adapter()`.
+- `RunManifest.from_dict()` / `from_yaml()` for round-trip serialization.
 
-**Completion signal:** A simple “fake training” script can produce a run directory with a manifest containing several dummy checkpoints.
+**Completion signal:** Fake training script produces populated `manifest.yaml` with N checkpoints.
 
 ---
 
 ## Milestone 3 – Minimal P1 LoRA+SFT pilot (single model, single domain)
 
-**Goal:** Run one real FMA trajectory end-to-end with temporal checkpoints.
+**Goal:** Run one real FMA trajectory end-to-end with temporal checkpoints using TRL.
 
-- Choose one 8B instruct model family (e.g. Llama‑3.1‑8B or one Apertus 8B instruct model as in the proposal).
-- Choose one **medical advice** dataset from the grant:
-  - e.g. `kabariap/II-Medical-Reasoning-SFT` or `lavita/ChatDoctor-HealthCareMagic-100k`.
-- Implement a LoRA+SFT trainer:
-  - single GPU / simple DDP (no FSDP yet),
-  - a small subset of the chosen dataset (e.g. 1–5k examples) for fast iteration.
-- Configure a Hydra experiment (e.g. `p1_temporal_detection_minimal`) that:
-  - trains LoRA+SFT on the chosen model+dataset,
-  - saves ~3–6 checkpoints across the trajectory,
-  - writes a complete `manifest.yaml` (including base model ID and adapter paths for each checkpoint).
+- Choose one 8B instruct model (e.g. `meta-llama/Llama-3.1-8B-Instruct`).
+- Choose one medical dataset (e.g. `lavita/ChatDoctor-HealthCareMagic-100k`, 2–5k examples).
+- Implement `fma/lora_sft.py` using **`trl.SFTTrainer`**:
+  - `bfloat16`, `packing=True`, gradient checkpointing, `sdpa` attention.
+  - `save_strategy="steps"` with interval derived from `checkpoint_schedule()`.
+  - `ManifestCallback` to record each TRL checkpoint into `manifest.yaml`.
+- SLURM job script under `cluster/` for a single GH200 node.
 
-**Completion signal:** You can run `+experiment=p1_temporal_detection_minimal` and get real checkpoints and a populated manifest for one LoRA+SFT run.
+**Completion signal:** `manifest.yaml` has 6 real adapter checkpoints;
+`adapter_config.json` + `adapter_model.safetensors` present in each step directory.
 
 ---
 
-## Milestone 4 – Basic checkpoint evaluation via lm_eval (general + AMR-like)
+## Milestone 4 – Checkpoint evaluation via lm-evaluation-harness
 
-**Goal:** Evaluate the pilot run at all checkpoints with one general and one AMR-relevant metric, using `lm-evaluation-harness`.
+**Goal:** Evaluate the pilot run at all checkpoints using `lm_eval`.
 
-- Wire up `amr_fma.eval` to use `lm_eval`’s HF backend:
-  - programmatic API (`simple_evaluate`) with `model="hf"` and `model_args` built from base model + PEFT/LoRA adapter path.
-- Add loaders / task definitions for at least:
-  - one general benchmark (e.g. small subset of MMLU or IFEval) via a built-in `lm_eval` task, and
-  - one simple AMR-like evaluation defined as a custom `lm_eval` task under `amr_fma.eval.tasks` (e.g. refusal rate on a small harmfulness subset).
-- Implement an eval pipeline that:
-  - takes `run_dir` and `EvalConfig`,
-  - iterates over all checkpoints from `manifest.yaml`,
-  - dispatches evaluations via `lm_eval`,
-  - writes per-checkpoint metrics to CSV (e.g. `eval/general/results.csv`, `eval/amr/results.csv`).
+- Implement `eval/run_eval.py`:
+  - Reads `manifest.yaml`, iterates checkpoints in order.
+  - Calls `lm_eval.simple_evaluate(model="hf", model_args=f"pretrained={base_id},peft={adapter_dir},dtype=bfloat16", ...)`.
+  - Writes per-checkpoint results to `eval/results.csv`.
+- Add at least one general task (e.g. `mmlu_pro` subset or `ifeval`).
+- Add one AMR proxy task as a custom `lm_eval` task under `amr_fma/eval/tasks/`:
+  - Start with refusal rate on a small harmfulness prompt set.
+- SLURM job script for eval over all checkpoints of a run.
 
-**Completion signal:** You can plot (even manually) a curve of “general metric vs training fraction” and “AMR proxy vs training fraction” for the minimal LoRA+SFT run, using metrics produced by `lm_eval`.
+**Completion signal:** `eval/results.csv` contains one row per checkpoint with
+general and AMR proxy metrics; you can plot capability vs. training fraction.
 
 ---
 
 ## Milestone 5 – Add code domain and full SFT
 
-**Goal:** Cover both adaptation domains and a second FMA method on at least one model family.
+**Goal:** Cover both adaptation domains and a second FMA method.
 
-- Add support for a **code generation** domain using grant datasets:
-  - e.g. `ise-uiuc/Magicoder-OSS-Instruct-75K` and/or `HuggingFaceH4/CodeAlpaca_20K`.
-- Implement or configure a **full SFT** trainer for the same 8B model family (saving full checkpoints or delta weights that `lm_eval` can load via `pretrained` / `revision` / delta mechanisms).
-- Extend Hydra experiments to:
-  - run LoRA+SFT and full SFT in both medical and code domains,
-  - still with small subsets for quick turnaround,
-  - still using the same checkpoint schedule and manifest structure.
-- Extend the eval config to run the same `lm_eval` suites (general + AMR-like) across all four trajectories.
+- Add code domain using `ise-uiuc/Magicoder-OSS-Instruct-75K` or `HuggingFaceH4/CodeAlpaca_20K`.
+- Implement full SFT in `fma/full_sft.py` using **`trl.SFTTrainer`** without PEFT:
+  - Save full model weights; ensure `lm_eval` can load via `pretrained=` directly.
+- Run 4 trajectories: `{medical, code} × {lora_sft, full_sft}` on the same 8B model.
+- Same `ManifestCallback` + eval pipeline works unchanged.
 
-**Completion signal:** You have four working trajectories (model × {medical, code} × {LoRA+SFT, full SFT}) with manifests and basic eval curves from `lm_eval`.
+**Completion signal:** 4 manifests, 4 eval CSV files, comparable curves across methods.
 
 ---
 
-## Milestone 6 – SDPO integration for P1
+## Milestone 6 – SDPO integration
 
-**Goal:** Bring in SDPO as a third FMA method, inspired by “Aligning Language Models from User Interactions”.
+**Goal:** Bring in SDPO as a third FMA method using TRL's DPO infrastructure.
 
-- Implement an offline SDPO trainer based on the SDPO procedure from the paper, integrated with your `RunManifest` and checkpoint logic (rather than hand-specified checkpoint lists).
-- Prepare a suitable interaction dataset (e.g. a small WildFeedback-style or synthetic interaction set) for at least one domain (medical or code).
-- Add Hydra configs for SDPO runs on one 8B model and one domain, with temporal checkpoints.
-- Ensure the SDPO checkpoints are compatible with `lm_eval` (either full HF checkpoints or base+adapter/delta form) so you can evaluate them in the same way as SFT and LoRA.
+- Implement `fma/sdpo_trainer.py` as a subclass of **`trl.DPOTrainer`**:
+  - Override `compute_loss()` with token-level advantages from the SDPO paper.
+  - Optionally add hindsight reprompting as a dataset pre-processing step.
+- Prepare a paired interaction dataset (chosen/rejected) for at least one domain.
+- `ManifestCallback` and eval pipeline require no changes.
 
-**Completion signal:** You can compare LoRA+SFT vs full SFT vs SDPO trajectories (same model + domain) in terms of general metric vs AMR proxy over checkpoints, all evaluated via `lm_eval`.
+**Completion signal:** SDPO trajectories produce checkpoints compatible with `lm_eval`;
+you can compare LoRA+SFT vs full SFT vs SDPO curves on the same plot.
 
 ---
 
-## Milestone 7 – P1 “mini grid” across model families
+## Milestone 7 – P1 "mini grid" across model families
 
-**Goal:** Run a pruned but real subset of the full P1 grid from the proposal.
+**Goal:** Run a representative subset of the full P1 grid.
 
-- Select a smaller set of base tasks:
-  - e.g. 2–3 model families out of Apertus, OLMo, Qwen, Llama, DeepSeek,
-  - both medical advice datasets (`II-Medical-Reasoning-SFT`, `ChatDoctor-HealthCareMagic-100k`),
-  - both code datasets (`Magicoder-OSS-Instruct-75K`, `CodeAlpaca_20K`).
-- For each selected combination, run:
-  - LoRA+SFT and full SFT (SDPO at least for one family/domain if compute permits),
-  - with a consistent checkpoint schedule and 2–3 seeds (as compute allows within the 50k GPUh budget).
-- Extend the eval pipeline to:
-  - include a richer AMR suite implemented as `lm_eval` tasks (e.g. deception, sycophancy, evaluation awareness where feasible),
-  - still keep general capability metrics from Milestone 4.
-- Standardise “eval suites” as YAML groups in `amr_fma.eval.groups` and reference them from Hydra’s `config/eval/` configs.
+- Select 2–3 model families from: Apertus, OLMo, Qwen, Llama, DeepSeek.
+- Both medical and code domains; LoRA+SFT and full SFT; SDPO for ≥1 family.
+- 2–3 seeds per configuration within the 50K GPU-h budget.
+- Extend `amr_fma/eval/tasks/` with richer AMR tasks:
+  - deception, sycophancy, eval awareness, shutdown resistance.
+  - All as custom `lm_eval` task YAML definitions.
+- Standardise eval task groups in `amr_fma/eval/groups/` referenced from configs.
 
-**Completion signal:** You have a small but representative dataset of trajectories across model families, domains, and FMA methods, with comparable checkpoint-level capability and AMR metrics (all coming from `lm_eval`).
+**Completion signal:** Representative dataset of trajectories across
+model families × domains × FMA methods with per-checkpoint capability + AMR metrics.
 
 ---
 
 ## Milestone 8 – Interpretability scaffolding (P2 interfaces)
 
-**Goal:** Put in place the data and interfaces needed for active interpretability, even if the methods are simple at first.
+**Goal:** Cache activations and train linear probes on P1 checkpoints.
 
-- Define file/layout conventions under each run for:
-  - `activations/step_{...}/...`
-  - `probes/step_{...}/...`
-- Implement activation caching for:
-  - one AMR concept (e.g. sycophancy or harmfulness),
-  - at selected checkpoints from a P1 run.
-- Implement simple linear probes on cached activations and save their weights.
-- Implement a basic P2 pipeline that:
-  - selects a checkpoint from a P1 run,
-  - caches activations, trains probes,
-  - constructs an FMA config with “probe penalty” or a simple steering option,
-  - calls the FMA “resume from checkpoint” pathway to create a mitigated run.
-- Decide whether mitigation is represented as:
-  - another PEFT/LoRA adapter (so you can keep using `--model hf` + `peft=` in `lm_eval`), or
-  - a custom `lm_eval` backend (e.g. `amr_steered_hf`) that applies interventions at inference time.
+- Define layout under each run: `activations/step_{...}/`, `probes/step_{...}/`.
+- Implement `interpretability/activation_cache.py`:
+  - Hook-based activation extraction for named layers at inference time.
+  - Save to `.pt` or `.npy` per checkpoint.
+- Implement `interpretability/probes.py`:
+  - Fit sklearn `LogisticRegression` on cached activations for one AMR concept.
+  - Save probe weights under `probes/step_{...}/`.
+- Implement a minimal P2 run: cache → probe → resume training with probe penalty
+  (a regularization term added to `compute_loss`).
+- Evaluation via the same `lm_eval` pipeline — no new infrastructure needed.
 
-**Completion signal:** You have at least one mitigated run where you can compare “before vs after mitigation” AMR metrics at the same or later training fractions, with both sets of metrics computed via `lm_eval`.
+**Completion signal:** One mitigated run where "before vs after mitigation"
+AMR metrics are comparable via `lm_eval`.
 
 ---
 
-## Milestone 9 – P2 mitigation experiments (few carefully chosen cases)
+## Milestone 9 – P2 mitigation experiments
 
-**Goal:** Run a small but meaningful set of mitigation experiments.
+**Goal:** A small but meaningful set of mitigation experiments.
 
-- Choose a handful of P1 runs where AMR drift is most evident (e.g. LoRA+SFT on medical or a specific SDPO run).
-- For each, pick ~3 intervention checkpoints (early, mid, late drift) as in the grant’s mitigation plan.
-- For each intervention:
-  - cache activations,
-  - train probes for a small set of AMR concepts,
-  - resume training with at least one mitigation strategy (probe penalty or steering),
-  - evaluate pre/post-mitigation across the AMR and general metrics via the same `lm_eval` suites.
+- Select P1 runs with clearest AMR drift.
+- For each: pick 3 intervention checkpoints (early/mid/late); apply probe penalty
+  or activation steering; evaluate pre/post via `lm_eval`.
 
-**Completion signal:** You can produce plots/tables like “AMR metric vs training fraction: baseline vs mitigated” for several runs and clearly see when mitigation helps or fails.
+**Completion signal:** Plots of "AMR metric vs training fraction: baseline vs mitigated"
+for several runs.
 
 ---
 
 ## Milestone 10 – P3 32B pilot
 
-**Goal:** Demonstrate that the pipeline transfers to 32B in a limited but realistic scenario.
+**Goal:** Demonstrate the pipeline scales to 32B.
 
-- Choose one 32B model (e.g. `allenai/OLMo-2-32B`).
-- Choose one domain (medical or code) and two FMA methods (e.g. LoRA+SFT and SDPO).
-- Configure training to use a more scalable backend (e.g. `accelerate` with FSDP), but keep:
-  - the same `RunManifest` structure,
-  - the same checkpoint schedule,
-  - the same eval/interpretability interfaces.
-- Make sure `lm_eval` can load the 32B checkpoints efficiently (HF with `parallelize=True` / tensor parallel, or vLLM with appropriate arguments).
-- Run a small number of trajectories and evaluate them with the existing `lm_eval`-based pipelines.
+- Choose `allenai/OLMo-2-32B`; one domain; LoRA+SFT + SDPO.
+- Use `accelerate` with FSDP via TRL's built-in distributed training support:
+  - No custom distributed code needed — TRL handles rank sync and saving.
+- `lm_eval` loads 32B checkpoints via `parallelize=True` or vLLM backend.
+- `ManifestCallback` and eval pipeline unchanged.
 
-**Completion signal:** You have at least one 32B run per selected FMA method with checkpoint-level capability + AMR metrics, and possibly one mitigation experiment, demonstrating that the pipeline scales.
+**Completion signal:** At least one 32B run per FMA method with checkpoint-level
+capability + AMR metrics, and one mitigation experiment.
