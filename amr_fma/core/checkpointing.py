@@ -11,6 +11,7 @@ Single-process training only. The manifest update is atomic, but there are no lo
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import tempfile
 import uuid
@@ -81,8 +82,10 @@ def atomic_write_yaml(path: Path, data: dict) -> None:
     ) as handle:
         temp_path = Path(handle.name)
         yaml.safe_dump(data, handle, sort_keys=False)
+        handle.flush()
+        os.fsync(handle.fileno())
 
-    shutil.move(temp_path, path)
+    os.replace(temp_path, path)
 
 
 def load_manifest(path: Path) -> RunManifest | None:
@@ -123,6 +126,10 @@ def save_checkpoint(
     manifest = load_manifest(paths.manifest_path)
     if manifest is None:
         raise FileNotFoundError(f"Manifest does not exist: {paths.manifest_path}")
+
+    if any(int(checkpoint["step"]) == step for checkpoint in manifest.checkpoints):
+        logging.warning("Checkpoint for step %s already exists, skipping", step)
+        return
 
     manifest.checkpoints.append(
         {

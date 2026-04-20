@@ -16,6 +16,7 @@ def load_base_model(
     model_id: str,
     torch_dtype: Any = None,
     device_map: str = "auto",
+    trust_remote_code: bool = False,
 ) -> Any:
     """Load a causal language model and cache its tokenizer."""
 
@@ -24,16 +25,10 @@ def load_base_model(
     except ImportError as exc:  # pragma: no cover - environment guard
         raise RuntimeError("transformers is required to load models") from exc
 
-    trust_remote_code = False
     try:
         config = AutoConfig.from_pretrained(model_id, trust_remote_code=trust_remote_code)
-    except Exception:
-        logging.warning("Retrying model load with trust_remote_code=True for %s", model_id)
-        trust_remote_code = True
-        try:
-            config = AutoConfig.from_pretrained(model_id, trust_remote_code=trust_remote_code)
-        except Exception as exc:
-            raise ModelNotFoundError(f"Unable to resolve model identifier: {model_id}") from exc
+    except Exception as exc:
+        raise ModelNotFoundError(f"Unable to resolve model identifier: {model_id}") from exc
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=trust_remote_code)

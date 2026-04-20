@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from .checkpointing import (
-    atomic_write_yaml,
     build_run_paths,
     checkpoint_schedule,
     generate_run_id,
@@ -19,7 +18,6 @@ __all__ = [
     "generate_run_id",
     "build_run_paths",
     "checkpoint_schedule",
-    "atomic_write_yaml",
     "load_manifest",
     "save_checkpoint",
     "list_checkpoints",

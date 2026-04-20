@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from amr_fma.core.checkpointing import (
     atomic_write_yaml,
     build_run_paths,
@@ -43,3 +45,36 @@ def test_fake_training(tmp_path, monkeypatch):
     assert loaded is not None
     assert len(loaded.checkpoints) == 5
     assert sorted(int(checkpoint["step"]) for checkpoint in loaded.checkpoints) == schedule
+
+
+def test_checkpoint_schedule_edge_cases():
+    assert checkpoint_schedule(10, 1) == [9]
+    assert checkpoint_schedule(10, 10) == list(range(10))
+
+
+def test_load_manifest_missing_file(tmp_path):
+    assert load_manifest(tmp_path / "manifest.yaml") is None
+
+
+def test_save_checkpoint_missing_artifact(tmp_path, monkeypatch):
+    base = tmp_path / "runs"
+    monkeypatch.setenv("BASE_OUTPUT_DIR", str(base))
+
+    paths = build_run_paths()
+    paths.run_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest = RunManifest(
+        phase="P1",
+        model_family="llama3",
+        domain="medical",
+        fma_method="lora_sft",
+        base_model_id="meta-llama/Meta-Llama-3-8B-Instruct",
+        seed=0,
+        run_id="0001",
+        experiment_name="dummy_p1_smoke",
+        git_commit=get_current_git_commit(),
+    )
+    atomic_write_yaml(paths.manifest_path, manifest.to_dict())
+
+    with pytest.raises(FileNotFoundError):
+        save_checkpoint(paths, 0, paths.run_dir / "missing-artifact")
