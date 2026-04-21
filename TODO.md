@@ -8,7 +8,7 @@ Milestones track high-level progress. Fine-grained tasks live in GitHub issues.
 |-----------|-------------|--------|
 | M1 | Repo & infrastructure skeleton | ✅ |
 | M2 | Core run / manifest / checkpoint logic | ✅ |
-| M3 | LoRA SFT pilot (single model, single domain) | 🔄 |
+| M3 | LoRA SFT pilot (single model, single domain) | ✅ |
 | M4 | Checkpoint evaluation | ⬜ |
 | M5 | Full SFT + code domain | ⬜ |
 | M6 | SDPO integration | ⬜ |

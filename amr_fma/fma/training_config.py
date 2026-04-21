@@ -121,7 +121,7 @@ class TrainingConfig:
     run: RunManifest
     dataset: DatasetConfig
     sequence: SequenceConfig
-    lora: LoraConfig
+    lora: LoraConfig | None
     optimization: OptimizationConfig
     checkpointing: CheckpointingConfig
     runtime: RuntimeConfig
@@ -137,33 +137,47 @@ class TrainingConfig:
             "run",
             "dataset",
             "sequence",
-            "lora",
             "optimization",
             "checkpointing",
             "runtime",
         }
+        optional_sections = {"lora"}
 
         missing_sections = sorted(required_sections - set(raw_config))
         if missing_sections:
             raise ValueError(f"Missing config sections: {', '.join(missing_sections)}")
 
-        unknown_sections = sorted(set(raw_config) - required_sections)
+        unknown_sections = sorted(set(raw_config) - required_sections - optional_sections)
         if unknown_sections:
             raise ValueError(f"Unknown config sections: {', '.join(unknown_sections)}")
 
         run_section = _section_dict(raw_config, "run")
         dataset_section = _section_dict(raw_config, "dataset")
         sequence_section = _section_dict(raw_config, "sequence")
-        lora_section = _section_dict(raw_config, "lora")
+        lora_section = raw_config.get("lora")
+        if lora_section is not None and not isinstance(lora_section, dict):
+            raise ValueError("Config section 'lora' must be a mapping")
         optimization_section = _section_dict(raw_config, "optimization")
         checkpointing_section = _section_dict(raw_config, "checkpointing")
         runtime_section = _section_dict(raw_config, "runtime")
 
-        target_modules = lora_section.get("target_modules")
-        if isinstance(target_modules, str):
-            lora_section["target_modules"] = [
-                item.strip() for item in target_modules.split(",") if item.strip()
-            ]
+        fma_method = run_section.get("fma_method")
+        if not isinstance(fma_method, str) or not fma_method.strip():
+            raise ValueError("run.fma_method must be a non-empty string")
+
+        if fma_method == "lora_sft" and lora_section is None:
+            raise ValueError("Config section 'lora' is required when run.fma_method is 'lora_sft'")
+        if fma_method in {"full_sft", "sdpo"} and lora_section is not None:
+            raise ValueError(
+                f"Config section 'lora' must be omitted when run.fma_method is '{fma_method}'"
+            )
+
+        if lora_section is not None:
+            target_modules = lora_section.get("target_modules")
+            if isinstance(target_modules, str):
+                lora_section["target_modules"] = [
+                    item.strip() for item in target_modules.split(",") if item.strip()
+                ]
 
         try:
             return cls(
@@ -176,7 +190,7 @@ class TrainingConfig:
                 ),
                 dataset=DatasetConfig(**dataset_section),
                 sequence=SequenceConfig(**sequence_section),
-                lora=LoraConfig(**lora_section),
+                lora=LoraConfig(**lora_section) if lora_section is not None else None,
                 optimization=OptimizationConfig(**optimization_section),
                 checkpointing=CheckpointingConfig(**checkpointing_section),
                 runtime=RuntimeConfig(**runtime_section),

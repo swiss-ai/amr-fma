@@ -17,7 +17,8 @@ import torch
 from datasets import Dataset, load_dataset
 from peft import LoraConfig as LoraPEFTConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
-from trl import SFTConfig, SFTTrainer
+from trl.trainer.sft_config import SFTConfig
+from trl.trainer.sft_trainer import SFTTrainer
 
 from amr_fma.core.checkpointing import atomic_write_yaml, load_manifest
 from amr_fma.core.manifest import RunManifest, get_current_git_commit
@@ -92,6 +93,9 @@ def load_dataset_for_sft(config: TrainingConfig) -> Dataset:
 
 def build_lora_config(config: TrainingConfig) -> LoraPEFTConfig:
     """Build the PEFT LoRA configuration from the training settings."""
+
+    if config.lora is None:
+        raise ValueError("LoRA config section is required for LoRA SFT training")
 
     target_module_names = list(config.lora.target_modules)
     if not target_module_names:
@@ -206,6 +210,11 @@ class ManifestCallback(TrainerCallback):
 
 def train(config: TrainingConfig) -> Path:
     """Run LoRA supervised fine-tuning and return the run directory."""
+
+    if config.run.fma_method != "lora_sft":
+        raise ValueError(
+            f"lora_sft.train only supports run.fma_method='lora_sft', got '{config.run.fma_method}'"
+        )
 
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
