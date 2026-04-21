@@ -128,7 +128,7 @@ def save_checkpoint(
         raise FileNotFoundError(f"Manifest does not exist: {paths.manifest_path}")
 
     if any(int(checkpoint["step"]) == step for checkpoint in manifest.checkpoints):
-        logging.warning("Checkpoint for step %s already exists, skipping", step)
+        logging.warning(f"Checkpoint for step {step} already exists, skipping")
         return
 
     manifest.checkpoints.append(
@@ -142,7 +142,7 @@ def save_checkpoint(
     manifest.checkpoints.sort(key=lambda checkpoint: int(checkpoint["step"]))
 
     atomic_write_yaml(paths.manifest_path, manifest.to_dict())
-    logging.info("Saved checkpoint %s -> %s", step, checkpoint_dir)
+    logging.info(f"Saved checkpoint {step} -> {checkpoint_dir}")
 
 
 def list_checkpoints(manifest: RunManifest) -> list[dict]:
