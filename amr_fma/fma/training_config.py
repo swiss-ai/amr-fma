@@ -10,32 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
-@dataclass(slots=True)
-class RunConfig:
-    """Run identity fields aligned with RunManifest keys."""
-
-    base_model_id: str
-    model_family: str
-    domain: str
-    fma_method: str
-    seed: int
-    run_id: str
-    experiment_name: str
-    phase: str
-
-    def __post_init__(self) -> None:
-        for field_name in (
-            "base_model_id",
-            "model_family",
-            "domain",
-            "fma_method",
-            "run_id",
-            "experiment_name",
-            "phase",
-        ):
-            _require_non_empty(field_name, getattr(self, field_name))
-        _require_positive_int("seed", self.seed)
+from amr_fma.core.manifest import RunManifest
 
 
 @dataclass(slots=True)
@@ -143,7 +118,7 @@ class RuntimeConfig:
 class TrainingConfig:
     """Top-level training config composed of nested sections."""
 
-    run: RunConfig
+    run: RunManifest
     dataset: DatasetConfig
     sequence: SequenceConfig
     lora: LoraConfigData
@@ -184,6 +159,19 @@ class TrainingConfig:
         checkpointing_section = _section_dict(raw_config, "checkpointing")
         runtime_section = _section_dict(raw_config, "runtime")
 
+        for field_name in (
+            "base_model_id",
+            "model_family",
+            "domain",
+            "fma_method",
+            "run_id",
+            "experiment_name",
+            "phase",
+        ):
+            _require_non_empty(f"run.{field_name}", str(run_section.get(field_name, "")))
+
+        _require_positive_int("run.seed", int(run_section.get("seed", 0)))
+
         target_modules = lora_section.get("target_modules")
         if isinstance(target_modules, str):
             lora_section["target_modules"] = [
@@ -192,7 +180,13 @@ class TrainingConfig:
 
         try:
             return cls(
-                run=RunConfig(**run_section),
+                run=RunManifest(
+                    **run_section,
+                    git_commit="UNKNOWN",
+                    dataset=dataset_section.get("name"),
+                    hyperparams={},
+                    checkpoints=[],
+                ),
                 dataset=DatasetConfig(**dataset_section),
                 sequence=SequenceConfig(**sequence_section),
                 lora=LoraConfigData(**lora_section),

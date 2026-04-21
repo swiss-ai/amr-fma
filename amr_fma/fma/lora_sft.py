@@ -242,19 +242,10 @@ def train(config: TrainingConfig) -> Path:
     )
     run_paths.run_dir.mkdir(parents=True, exist_ok=True)
 
-    manifest = RunManifest(
-        phase=config.run.phase,
-        model_family=config.run.model_family,
-        domain=config.run.domain,
-        fma_method=config.run.fma_method,
-        base_model_id=config.run.base_model_id,
-        seed=config.run.seed,
-        run_id=config.run.run_id,
-        experiment_name=config.run.experiment_name,
-        git_commit=get_current_git_commit(),
-        dataset=config.dataset.name,
-        hyperparams=asdict(config),
-    )
+    manifest = RunManifest.from_dict(config.run.to_dict())
+    manifest.git_commit = get_current_git_commit()
+    manifest.dataset = config.dataset.name
+    manifest.hyperparams = asdict(config)
     atomic_write_yaml(run_paths.manifest_path, manifest.to_dict())
 
     use_bf16 = config.runtime.bf16
