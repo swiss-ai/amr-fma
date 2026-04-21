@@ -9,6 +9,8 @@ dependencies = [
     "lm-eval[hf]==0.4.10",
     "python-dotenv>=1.2.2",
     "transformers>=5.5.4",
+    "trl>=1.2.0",
+    "wandb>=0.17.0",
 ]
 
 [build-system]
@@ -30,9 +32,6 @@ dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.11",
 ]
-
-[project.scripts]
-amr-fma-dummy = "amr_fma.core.dummy_experiment:main"
 
 [tool.ruff]
 line-length = 100

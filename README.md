@@ -43,7 +43,6 @@ uv run amr-fma-dummy
 
 You also need to prepare an env file under `.env` in the repo root. You can use the `.env.example` for reference.
 
-
 For setup on Alps cluster please refer to: [cluster setup](cluster/README.md).
 
 ---
@@ -54,7 +53,7 @@ We separate the codebase into three conceptual layers:
 
 - `core`: shared abstractions for runs, manifests, checkpoints, models, and configuration.
 - `fma`: training and adaptation (P1, and resuming for P2/P3). The SFT module is built on top of the TRL library.
-- `eval`: general and AMR-specific evaluation pipelines, built on top of [`lm-evaluation-harness`](https://github.com/EleutherAI/lm-evaluation-harness).
+- `eval`: general and AMR-specific evaluation pipelines, will be built on top of [`lm-evaluation-harness`](https://github.com/EleutherAI/lm-evaluation-harness).
 - `interpretability`: caching activations, training probes, and running mitigation interventions (P2).
 
 Only the **FMA layer** mutates model weights and writes checkpoints. Evaluation and interpretability are read-only on top of the recorded checkpoints.
@@ -65,69 +64,42 @@ Configuration and experiment orchestration are handled via **Hydra**, and experi
 
 ## Repository structure
 
-Planned layout (subject to iteration):
+Current layout (subject to iteration):
 
 ```text
 amr-fma/
 ├── amr_fma/                           # Installable Python package
 │   ├── core/                          # Shared contracts + utilities
-│   │   ├── configs.py                 # FMAConfig, EvalConfig, MitigationConfig, CheckpointInfo, RunManifest
-│   │   ├── runs.py                    # RunId/RunPaths, checkpoint scheduling, manifest I/O
-│   │   ├── checkpoints.py             # Save/load checkpoints, resume helpers
-│   │   └── models.py                  # Loading base models/adapters, device/dtype placement
+│   │   ├── paths.py                   # RunPaths: canonical P1/P2/P3 directory layout
+│   │   ├── manifest.py                # RunManifest dataclass + YAML serialisation
+│   │   ├── checkpointing.py           # Atomic manifest writes, checkpoint scheduling
+│   │   ├── models.py                  # Loading base models/adapters, device/dtype placement
+│   │   ├── env.py                     # BASE_OUTPUT_DIR and other env var helpers
+│   │   └── dummy_experiment.py        # Smoke-test run (no real model weights)
 │   │
 │   ├── fma/                           # Phase 1: adaptation (LoRA+SFT, full SFT, SDPO)
-│   │   ├── trainers.py                # Training loops using configs + RunPaths
-│   │   └── pipelines.py               # High-level "run FMA trajectory" + "resume from checkpoint"
+│   │   ├── training_config.py         # Typed config sections (DatasetConfig, LoraConfig, …)
+│   │   └── lora_sft.py                # LoRA SFT trainer (TRL SFTTrainer + ManifestCallback)
 │   │
-│   ├── eval/                          # Evaluation of capability + AMR metrics
-│   │   ├── datasets.py                # Dataset loaders/wrappers (general + AMR)
-│   │   ├── evaluators.py              # Thin wrappers calling lm-evaluation-harness (HF/vLLM backends)
-│   │   ├── pipeline.py                # "Evaluate all checkpoints for this run" → CSV outputs
-│   │   ├── tasks/                     # lm-eval task definitions (YAML/Python)
-│   │   │   ├── __init__.py
-│   │   │   ├── amr_harmfulness.yaml
-│   │   │   ├── amr_deception.yaml
-│   │   │   ├── amr_sycophancy.yaml
-│   │   │   ├── shutdown_resistance.yaml
-│   │   │   └── eval_awareness.yaml
-│   │   └── groups/                    # Logical task groupings
-│   │       ├── general_capabilities.yaml
-│   │       └── amr_suite.yaml
+│   ├── eval/                          # Evaluation of capability + AMR metrics (planned)
+│   │   └── tasks/                     # Custom lm-eval task definitions (planned)
 │   │
-│   └── interpretability/              # Phase 2: active interpretability / mitigation
-│       ├── activations.py             # Hooks + caching at selected checkpoints
-│       ├── probes.py                  # Linear probe training on cached activations
-│       ├── interventions.py           # Probe penalties, steering, activation clamping
-│       └── pipeline.py                # "Run mitigation from checkpoint" orchestration
+│   └── interpretability/              # Phase 2: active interpretability / mitigation (planned)
 │
-├── config/                            # Hydra configuration tree (runtime, not Python)
-│   ├── config.yaml                    # Base config (imports defaults)
-│   ├── experiment/
-│   │   ├── p1_temporal_detection.yaml
-│   │   ├── p1_eval.yaml
-│   │   ├── p2_mitigation.yaml
-│   │   └── p3_scaling.yaml
-│   ├── model/                         # Model presets (Apertus, OLMo, Qwen, Llama, DeepSeek, OLMo-32B)
-│   ├── dataset/                       # Medical/code datasets + AMR eval sets
-│   ├── fma/                           # FMA presets (LoRA+SFT, full SFT, SDPO)
-│   ├── eval/                          # lm-eval task bundles/suites
-│   └── mitigation/                    # Probe/intervention strategies
+├── configs/                           # Hydra configuration tree (runtime, not Python)
+│   └── example/
+│       └── pilot_tinygpt2.yaml        # Minimal smoke-test config (tiny-gpt2 + ChatDoctor subset)
 │
-├── scripts/                           # Thin CLI wrappers (Hydra + env setup)
-│   ├── p1_train.sh                    # Run P1 trajectory (train + checkpoints)
-│   ├── p1_eval.sh                     # Evaluate run checkpoints
-│   ├── p2_mitigation.sh               # Probes + mitigation from checkpoint
-│   └── p3_scaling.sh                  # 32B scaling runs
+├── scripts/                           # Thin entry points (Hydra + env setup)
+│   └── run_lora_sft.py                # LoRA SFT training entry point
 │
-├── slurm/                             # Alps/CSCS job scripts (GH200 nodes)
+├── cluster/                           # SLURM job scripts for Alps/CSCS (GH200 nodes)
 │
-├── results/                           # Small manifests/summary CSVs (no heavy weights)
+├── tests/
+│   └── test_lora_sft_smoke.py         # End-to-end smoke test (no real model weights needed)
 │
-├── README.md                          # Project overview + quickstart
-├── CONTRIBUTING.md                    # Dev workflow + CI enforcement
+├── README.md
 ├── TODO.md                            # Roadmap/milestones
-├── LICENSE
 ├── pyproject.toml                     # uv/pip dependencies
 ├── .env.example                       # BASE_OUTPUT_DIR, WANDB_API_KEY, HF_HOME
 └── .github/workflows/ci.yml           # Ruff + pytest enforcement on PRs
@@ -141,23 +113,4 @@ core  <--  eval
 core  <--  interpretability
 ```
 
-`eval` and `interpretability` never import `fma.trainers` directly; they only use `core` abstractions (manifests, RunPaths, checkpoint loaders).
-
----
-
-## Evaluation with lm-evaluation-harness
-
-The evaluation layer (`amr_fma.eval`) is built around [`lm-evaluation-harness`](https://github.com/EleutherAI/lm-evaluation-harness), which provides a standard abstraction for language model benchmarks and multiple backends (HF, vLLM, APIs, etc.).
-
-We use it in two ways:
-
-- **Built-in tasks**
-  - General capability benchmarks (e.g. MMLU, BBH, IFEval, etc.) are reused from `lm_eval`’s built-in task library where possible.
-- **AMR-specific tasks**
-  - AMR benchmarks (harmfulness, deception, sycophancy, shutdown resistance, evaluation awareness, etc.) are implemented as custom `lm_eval` tasks under `amr_fma/eval/tasks/` (YAML or Python), following the official task schema and APIs.
-
-The `evaluators.py` and `pipeline.py` modules then:
-
-- Map a given model checkpoint (from `core.runs`/`core.checkpoints`) to an appropriate `lm_eval` model backend (HF or vLLM, with LoRA/PEFT or SDPO if needed).
-- Construct and dispatch `lm_eval` evaluations (via `simple_evaluate` or CLI-style invocation).
-- Log metrics and, optionally, sample
+`eval` and `interpretability` never import `fma` directly; they only use `core` abstractions (manifests, RunPaths, checkpoint loaders).

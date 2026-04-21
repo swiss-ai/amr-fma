@@ -1,0 +1,10 @@
+{
+  // Use the workspace .env by default
+  "python.envFile": "${workspaceFolder}/.env",
+
+  // This is the key one: inject .env into terminals
+  "python.terminal.useEnvFile": true,
+
+  // Usually you also want the venv auto-activated
+  "python.terminal.activateEnvironment": true
+}
