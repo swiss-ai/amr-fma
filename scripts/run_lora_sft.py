@@ -13,7 +13,7 @@ from amr_fma.fma.lora_sft import train
 from amr_fma.fma.training_config import TrainingConfig
 
 
-@hydra.main(version_base=None, config_path="../configs/example", config_name="pilot_tinygpt2")
+@hydra.main(version_base=None, config_path="../configs/", config_name="pilot_tinygpt2")
 def main(config: DictConfig) -> None:
     train(TrainingConfig.from_dict(OmegaConf.to_object(config)))
 

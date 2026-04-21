@@ -10,6 +10,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "transformers>=5.5.4",
     "trl>=1.2.0",
+    "wandb>=0.17.0",
 ]
 
 [build-system]

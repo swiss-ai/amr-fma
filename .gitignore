@@ -217,6 +217,7 @@ marimo/_lsp/
 __marimo__/
 
 
-# Logs and hydra outputs
+# Logs, wandb and hydra outputs
 logs/
 outputs/
+wandb/

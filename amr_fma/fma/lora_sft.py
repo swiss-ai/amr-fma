@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,27 @@ from amr_fma.core.paths import RunPaths
 from amr_fma.fma.training_config import TrainingConfig
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _setup_wandb(enabled: bool) -> None:
+    """Configure a minimal Weights & Biases setup when requested."""
+
+    if not enabled:
+        return
+
+    try:
+        import wandb  # noqa: F401
+    except ImportError as error:
+        raise RuntimeError(
+            "runtime.wandb is true, but the 'wandb' package is not installed. "
+            "Install it with: pip install wandb"
+        ) from error
+
+    os.environ.setdefault("WANDB_PROJECT", "amr-fma")
+    if not os.environ.get("WANDB_API_KEY"):
+        LOGGER.warning("WANDB_API_KEY is not set. W&B may prompt for login or run in offline mode.")
+
+    LOGGER.info("W&B tracking enabled for project: %s", os.environ.get("WANDB_PROJECT"))
 
 
 def load_dataset_for_sft(config: TrainingConfig) -> Dataset:
@@ -219,6 +241,7 @@ def train(config: TrainingConfig) -> Path:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
+    _setup_wandb(config.runtime.wandb)
 
     LOGGER.info("Loading tokenizer for %s", config.run.base_model_id)
     tokenizer = AutoTokenizer.from_pretrained(config.run.base_model_id, use_fast=True)
@@ -267,7 +290,7 @@ def train(config: TrainingConfig) -> Path:
         run_name=config.run.experiment_name,
         seed=config.run.seed,
         do_train=True,
-        report_to=["wandb"] if config.runtime.wandb else "none",
+        report_to="wandb" if config.runtime.wandb else "none",
         per_device_train_batch_size=config.optimization.per_device_batch_size,
         gradient_accumulation_steps=config.optimization.gradient_accumulation_steps,
         learning_rate=config.optimization.learning_rate,
