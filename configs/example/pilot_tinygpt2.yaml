@@ -36,7 +36,6 @@ optimization:
  weight_decay: 0.0
  lr_scheduler_type: cosine
  max_grad_norm: 1.0
- max_steps: 24
 
 checkpointing:
  num_checkpoints: 6
