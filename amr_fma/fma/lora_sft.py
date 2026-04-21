@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import math
 import os
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +22,6 @@ from trl.trainer.sft_config import SFTConfig
 from trl.trainer.sft_trainer import SFTTrainer
 
 from amr_fma.core.checkpointing import atomic_write_yaml, load_manifest
-from amr_fma.core.manifest import RunManifest, get_current_git_commit
 from amr_fma.core.paths import RunPaths
 from amr_fma.fma.training_config import TrainingConfig
 
@@ -274,10 +273,12 @@ def train(config: TrainingConfig) -> Path:
     )
     run_paths.run_dir.mkdir(parents=True, exist_ok=True)
 
-    manifest = RunManifest.from_dict(config.run.to_dict())
-    manifest.git_commit = get_current_git_commit()
-    manifest.dataset = config.dataset.name
-    manifest.hyperparams = asdict(config)
+    manifest = replace(
+        config.run,
+        dataset=config.dataset.name,
+        hyperparams=asdict(config),
+        checkpoints=[],
+    )
     atomic_write_yaml(run_paths.manifest_path, manifest.to_dict())
 
     use_bf16 = config.runtime.bf16
@@ -300,7 +301,9 @@ def train(config: TrainingConfig) -> Path:
         num_train_epochs=config.optimization.num_train_epochs,
         max_grad_norm=config.optimization.max_grad_norm,
         logging_steps=config.runtime.logging_steps,
-        save_strategy="no",
+        # Keep automatic saves effectively disabled but allow callback-triggered saves.
+        save_strategy="steps",
+        save_steps=999_999_999,
         save_total_limit=config.checkpointing.save_total_limit,
         bf16=use_bf16,
         gradient_checkpointing=config.runtime.gradient_checkpointing,

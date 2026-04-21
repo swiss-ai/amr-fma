@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from amr_fma.core.manifest import RunManifest
+from amr_fma.core.manifest import RunManifest, get_current_git_commit
 
 
 @dataclass(slots=True)
@@ -183,7 +183,7 @@ class TrainingConfig:
             return cls(
                 run=RunManifest(
                     **run_section,
-                    git_commit="UNKNOWN",
+                    git_commit=get_current_git_commit(),
                     dataset=dataset_section.get("name"),
                     hyperparams={},
                     checkpoints=[],
