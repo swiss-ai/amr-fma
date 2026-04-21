@@ -32,9 +32,6 @@ dev = [
     "ruff>=0.15.11",
 ]
 
-[project.scripts]
-amr-fma-dummy = "amr_fma.core.dummy_experiment:main"
-
 [tool.ruff]
 line-length = 100
 target-version = "py310"

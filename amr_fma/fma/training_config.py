@@ -44,7 +44,7 @@ class SequenceConfig:
 
 
 @dataclass(slots=True)
-class LoraConfigData:
+class LoraConfig:
     """LoRA adapter hyperparameters and target module selection."""
 
     r: int
@@ -121,7 +121,7 @@ class TrainingConfig:
     run: RunManifest
     dataset: DatasetConfig
     sequence: SequenceConfig
-    lora: LoraConfigData
+    lora: LoraConfig
     optimization: OptimizationConfig
     checkpointing: CheckpointingConfig
     runtime: RuntimeConfig
@@ -159,19 +159,6 @@ class TrainingConfig:
         checkpointing_section = _section_dict(raw_config, "checkpointing")
         runtime_section = _section_dict(raw_config, "runtime")
 
-        for field_name in (
-            "base_model_id",
-            "model_family",
-            "domain",
-            "fma_method",
-            "run_id",
-            "experiment_name",
-            "phase",
-        ):
-            _require_non_empty(f"run.{field_name}", str(run_section.get(field_name, "")))
-
-        _require_positive_int("run.seed", int(run_section.get("seed", 0)))
-
         target_modules = lora_section.get("target_modules")
         if isinstance(target_modules, str):
             lora_section["target_modules"] = [
@@ -189,7 +176,7 @@ class TrainingConfig:
                 ),
                 dataset=DatasetConfig(**dataset_section),
                 sequence=SequenceConfig(**sequence_section),
-                lora=LoraConfigData(**lora_section),
+                lora=LoraConfig(**lora_section),
                 optimization=OptimizationConfig(**optimization_section),
                 checkpointing=CheckpointingConfig(**checkpointing_section),
                 runtime=RuntimeConfig(**runtime_section),

@@ -15,7 +15,7 @@ from typing import Any
 
 import torch
 from datasets import Dataset, load_dataset
-from peft import LoraConfig
+from peft import LoraConfig as LoraPEFTConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
 from trl import SFTConfig, SFTTrainer
 
@@ -90,14 +90,14 @@ def load_dataset_for_sft(config: TrainingConfig) -> Dataset:
     return dataset_split.map(format_example, remove_columns=dataset_split.column_names)
 
 
-def build_lora_config(config: TrainingConfig) -> LoraConfig:
+def build_lora_config(config: TrainingConfig) -> LoraPEFTConfig:
     """Build the PEFT LoRA configuration from the training settings."""
 
     target_module_names = list(config.lora.target_modules)
     if not target_module_names:
         raise ValueError("target_modules must include at least one module name")
 
-    return LoraConfig(
+    return LoraPEFTConfig(
         r=config.lora.r,
         lora_alpha=config.lora.alpha,
         lora_dropout=config.lora.dropout,
@@ -274,7 +274,8 @@ def train(config: TrainingConfig) -> Path:
         gradient_checkpointing=config.runtime.gradient_checkpointing,
         use_cache=not config.runtime.gradient_checkpointing,
         max_length=config.sequence.max_length,
-        dataset_text_field=config.dataset.text_field,
+        # load_dataset_for_sft always normalizes examples to a "text" column.
+        dataset_text_field="text",
         packing=config.sequence.packing,
     )
 
