@@ -47,7 +47,7 @@ def load_base_model(
     try:
         model._amr_fma_tokenizer = tokenizer
     except Exception:
-        logging.debug(f"Unable to attach tokenizer to model instance for {model_id}")
+        logging.debug("Unable to attach tokenizer to model instance for %s", model_id)
     return model
 
 

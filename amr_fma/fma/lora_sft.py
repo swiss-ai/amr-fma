@@ -141,15 +141,17 @@ class ManifestCallback(TrainerCallback):
         # Warn if we had to reduce the count due to insufficient steps
         if effective_num_checkpoints < self.num_checkpoints:
             LOGGER.warning(
-                f"Requested {self.num_checkpoints} checkpoints but run has only {total_steps} total steps; "
-                f"will save {effective_num_checkpoints} checkpoints instead"
+                "Requested %s checkpoints but run has only %s total steps; will save %s checkpoints instead",
+                self.num_checkpoints,
+                total_steps,
+                effective_num_checkpoints,
             )
 
         schedule_text = ", ".join(
             f"step {step} ({self.step_to_fraction[step]:.0%})"
             for step in sorted(self.scheduled_steps)
         )
-        LOGGER.info(f"Checkpoint schedule by fraction: {schedule_text}")
+        LOGGER.info("Checkpoint schedule by fraction: %s", schedule_text)
         return control
 
     def on_step_end(self, args: Any, state: Any, control: Any, **_: Any) -> Any:
@@ -166,12 +168,12 @@ class ManifestCallback(TrainerCallback):
     ) -> Any:
         manifest = load_manifest(self.manifest_path)
         if manifest is None:
-            LOGGER.warning(f"Manifest not found at save time: {self.manifest_path}")
+            LOGGER.warning("Manifest not found at save time: %s", self.manifest_path)
             return control
 
         checkpoint_dir = Path(args.output_dir) / f"checkpoint-{state.global_step}"
         if not checkpoint_dir.exists():
-            LOGGER.warning(f"Checkpoint directory was not found: {checkpoint_dir}")
+            LOGGER.warning("Checkpoint directory was not found: %s", checkpoint_dir)
             return control
 
         if any(
@@ -184,7 +186,9 @@ class ManifestCallback(TrainerCallback):
         if fraction is not None:
             metadata["fraction_of_run"] = fraction
             LOGGER.info(
-                f"Saving checkpoint at step {state.global_step} ({fraction * 100:.0f}% of run)"
+                "Saving checkpoint at step %s (%.0f%% of run)",
+                state.global_step,
+                fraction * 100,
             )
 
         manifest.checkpoints.append(
@@ -207,12 +211,12 @@ def train(config: TrainingConfig) -> Path:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
 
-    LOGGER.info(f"Loading tokenizer for {config.run.base_model_id}")
+    LOGGER.info("Loading tokenizer for %s", config.run.base_model_id)
     tokenizer = AutoTokenizer.from_pretrained(config.run.base_model_id, use_fast=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    LOGGER.info(f"Loading model for {config.run.base_model_id}")
+    LOGGER.info("Loading model for %s", config.run.base_model_id)
     model = AutoModelForCausalLM.from_pretrained(
         config.run.base_model_id,
         trust_remote_code=False,
@@ -222,7 +226,7 @@ def train(config: TrainingConfig) -> Path:
         model.gradient_checkpointing_enable()
         model.config.use_cache = False
 
-    LOGGER.info(f"Loading dataset {config.dataset.name} ({config.dataset.split} split)")
+    LOGGER.info("Loading dataset %s (%s split)", config.dataset.name, config.dataset.split)
     dataset = load_dataset_for_sft(config)
     if len(dataset) == 0:
         raise ValueError(f"Dataset {config.dataset.name} split {config.dataset.split} is empty")
@@ -284,7 +288,8 @@ def train(config: TrainingConfig) -> Path:
     )
 
     LOGGER.info(
-        f"Starting trainer with {config.checkpointing.num_checkpoints} requested checkpoints"
+        "Starting trainer with %s requested checkpoints",
+        config.checkpointing.num_checkpoints,
     )
     trainer = SFTTrainer(
         model=model,
@@ -306,5 +311,5 @@ def train(config: TrainingConfig) -> Path:
         final_manifest.hyperparams["final_adapter_path"] = str(final_adapter_path)
         atomic_write_yaml(run_paths.manifest_path, final_manifest.to_dict())
 
-    LOGGER.info(f"Training completed. Run directory: {run_paths.run_dir}")
+    LOGGER.info("Training completed. Run directory: %s", run_paths.run_dir)
     return run_paths.run_dir

@@ -79,9 +79,9 @@ def main(argv=None) -> None:
                 paths, step, dummy_artifact_path, metadata={"source": "dummy_experiment"}
             )
 
-    logging.info(f"Base output dir: {base_dir}")
-    logging.info(f"Created dummy experiment at {run_dir}")
-    logging.info(f"Wrote manifest to {paths.manifest_path}")
+    logging.info("Base output dir: %s", base_dir)
+    logging.info("Created dummy experiment at %s", run_dir)
+    logging.info("Wrote manifest to %s", paths.manifest_path)
 
 
 if __name__ == "__main__":
