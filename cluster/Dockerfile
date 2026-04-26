@@ -6,12 +6,18 @@ ARG BRANCH=main
 
 WORKDIR /workspace
 
+COPY constraints-packages.txt /workspace/constraints-packages.txt
+RUN REGEX=$(paste -sd'|' /workspace/constraints-packages.txt | sed 's/^/^(/;s/$/)==?/') && \
+    pip list --format=freeze | grep -E "$REGEX" > /workspace/frozen.txt
+
 RUN git clone --branch ${BRANCH} --single-branch https://github.com/swiss-ai/amr-fma.git
 WORKDIR /workspace/amr-fma
 
-# should I really do break-system-packages? 
-RUN uv pip install -e . --system --break-system-packages
+RUN uv pip install --system --break-system-packages \
+    -e . \
+    --constraint /workspace/frozen.txt
 
 ENV CUDA_CACHE_DISABLE=1
 
 CMD ["/bin/bash"]
+
