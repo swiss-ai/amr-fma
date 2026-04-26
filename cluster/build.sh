@@ -11,7 +11,7 @@ trap 'echo "Build failed at $(date)" >&2' ERR
 BRANCH=${1:-main}
 REPO=/iopsstor/scratch/cscs/$USER/amr-fma
 TAG="amr-fma:${BRANCH}"
-TAG_FILE_NAME="amr-fma+25.06-${BRANCH}.sqsh"
+TAG_FILE_NAME="amr-fma+26.02-${BRANCH}.sqsh"
 CE_IMAGE_DIR=${SCRATCH}/ce-images
 
 echo "Branch:  $BRANCH"

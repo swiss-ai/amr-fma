@@ -39,7 +39,7 @@ def _setup_wandb(enabled: bool) -> None:
     except ImportError as error:
         raise RuntimeError(
             "runtime.wandb is true, but the 'wandb' package is not installed. "
-            "Install it with: pip install wandb"
+            "Install it with: uv pip install wandb"
         ) from error
 
     os.environ.setdefault("WANDB_PROJECT", "amr-fma")
@@ -211,9 +211,10 @@ class ManifestCallback(TrainerCallback):
         if fraction is not None:
             metadata["fraction_of_run"] = fraction
             LOGGER.info(
-                "Saving checkpoint at step %s (%.0f%% of run)",
+                "Saving checkpoint at step %s (%.0f%% of run) at %s",
                 state.global_step,
                 fraction * 100,
+                checkpoint_dir,
             )
 
         manifest.checkpoints.append(
