@@ -20,7 +20,6 @@ echo "Commit: $(git -C $REPO rev-parse HEAD)"
 echo "Branch: $(git -C $REPO rev-parse --abbrev-ref HEAD)"
 cd "$REPO"
 
-
 srun --environment="$REPO/cluster/env.toml" \
-    uv run python scripts/run_lora_sft.py \
+    python scripts/run_lora_sft.py \
         --config-name simple_lora

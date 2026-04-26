@@ -11,7 +11,7 @@ runtime.
 
 | File | Purpose |
 |---|---|
-| `Dockerfile` | Container image built on top of NGC PyTorch 25.06 |
+| `Dockerfile` | Container image built on top of NGC PyTorch 26.02 |
 | `constraints-packages.txt` | NGC packages to pin during the image build (prevents torch/CUDA downgrades) |
 | `build.sh` | Builds the image interactively (run via `srun --pty bash`) |
 | `env.toml` | [Environment Definition File](https://docs.cscs.ch/software/container-engine/run/); defines mounts, env vars, NCCL hooks |
@@ -61,13 +61,19 @@ Keys are loaded automatically at runtime via `python-dotenv` (`amr_fma/core/env.
 **3. Build the image:**
 ```bash
 # first exec into an interactive job
-srun --account=infra01 --partition=normal --time=01:00:00 --pty bash
+srun --account=infra01 --partition=debug --time=01:00:00 --pty bash
 # run the build
 bash cluster/build.sh
 ```
 Unfortunately, this needs to be done in an interactive job, because sbatch does not enable NAT connections from the node.
 
-> Note: optionally, you can 'borrow' an existing `enroot` image, e.g. from here: `/iopsstor/scratch/cscs/tkwiecinski/ce-images/amr-fma+25.06.sqsh`
+> Note: optionally, you can 'borrow' an existing `enroot` image, e.g. from here: `/iopsstor/scratch/cscs/tkwiecinski/ce-images/amr-fma+26.02.sqsh`
+
+**4. Run the scripts:**
+
+``bash
+sbatch cluster/train.sbatch
+```
 
 
 
@@ -84,4 +90,3 @@ Unfortunately, this needs to be done in an interactive job, because sbatch does 
 ### Notes
 
 To see some insights about working with the cluster, feel free to browse some [tips](../docs/tips_and_tricks.md).
-

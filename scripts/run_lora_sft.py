@@ -6,15 +6,14 @@ Usage:
 
 from __future__ import annotations
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 import hydra
+from dotenv import load_dotenv
 from omegaconf import DictConfig, OmegaConf
 
 from amr_fma.fma.lora_sft import train
 from amr_fma.fma.training_config import TrainingConfig
+
+load_dotenv()
 
 
 @hydra.main(version_base=None, config_path="../configs/", config_name="pilot_tinygpt2")
