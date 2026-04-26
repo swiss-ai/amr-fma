@@ -12,31 +12,36 @@ runtime.
 | File | Purpose |
 |---|---|
 | `Dockerfile` | Container image built on top of NGC PyTorch 25.06 |
+| `constraints-packages.txt` | NGC packages to pin during the image build (prevents torch/CUDA downgrades) |
 | `build.sh` | Builds the image interactively (run via `srun --pty bash`) |
 | `env.toml` | [Environment Definition File](https://docs.cscs.ch/software/container-engine/run/); defines mounts, env vars, NCCL hooks |
-| `train.sbatch` | Single training run (draft) |
-| `train_multirun.sbatch` | Parallel sweep across a GPU array (draft) |
+
 
 ## Environment Design
 
 The environment is split into two layers:
 
 ```
-Image (.sqsh)  — rebuilt only when pyproject.toml changes
-──────────────────────────────────────────────────────────
+Image (.sqsh)  — rebuilt when pyproject.toml or constraints-packages.txt changes
+──────────────────────────────────────────────────────────────────────────────────
 NGC PyTorch 25.06-py3 (torch, transformers, numpy, ...)
-+ extra deps installed via uv (wandb, hydra, peft, ...)
++ project dependencies installed via uv (wandb, hydra, trl, ...)
+  with NGC packages pinned via constraints-packages.txt
 
 Mounted at runtime via env.toml
 ──────────────────────────────────────────────────────────
-$SCRATCH/amr-fma/        ← source code (git pull to update)
-~/keys/                  ← HF / W&B tokens
-/capstor/scratch/$USER/  ← HF cache, probe checkpoints
+/iopsstor  ← repo lives here; .env (API keys) lives here too
+/capstor   ← HF cache, checkpoints
 ```
 
-Code changes never require a rebuild — only `pyproject.toml` changes do, such as adding new dependencies.
+Source code changes never require a rebuild — only `pyproject.toml` or `constraints-packages.txt` changes do.
 
-> Please note, that this environment contains only the training scripts, not the `annotation` and `generation` pipeline also used in the [old repo](https://github.com/sevdari/hallucination_probes).
+### How live code editing works
+
+The image installs `amr_fma` along with all dependencies into site-packages. This frozen copy exists only to ensure all dependencies are cached in the image — it is never used at runtime.
+
+`PYTHONPATH` in `env.toml` points to the live mounted repo. Python resolves `PYTHONPATH` entries before site-packages, so the mounted `amr_fma` is what actually gets imported. Running `git pull` at the live path takes effect immediately without any rebuild.
+
 
 ## First-Time Setup
 
@@ -46,13 +51,12 @@ mkdir -p $SCRATCH/ce-images
 lfs setstripe -E 4M -c 1 -E 64M -c 4 -E -1 -c -1 -S 4M $SCRATCH/ce-images
 ```
 
-**2. Store your API keys:**
+**2. Create your `.env` file:**
 ```bash
-mkdir -p ~/keys
-echo "hf_..." > ~/keys/.hf_token
-echo "..." > ~/keys/.wandb_key
-echo "hf_..." > ~/keys/.hf_token_write  # optional, only for HF uploads
+cp .env.example .env
+# then fill in HF_TOKEN and WANDB_API_KEY
 ```
+Keys are loaded automatically at runtime via `python-dotenv` (`amr_fma/core/env.py`). The `.env` file lives in the repo root, which is already mounted into the container via `/iopsstor` — no separate secrets mount needed. The `.env` file is git-ignored.
 
 **3. Build the image:**
 ```bash
@@ -65,20 +69,17 @@ Unfortunately, this needs to be done in an interactive job, because sbatch does 
 
 > Note: optionally, you can 'borrow' an existing `enroot` image, e.g. from here: `/iopsstor/scratch/cscs/tkwiecinski/ce-images/amr-fma+25.06.sqsh`
 
-**4. Submit a training job:**
-```bash
-sbatch cluster/train.sbatch
-```
+
+
 
 ## Rebuilding vs. Updating Code
 
 | What changed | Action needed |
 |---|---|
-| Source code | `git pull` inside the running container — no rebuild |
+| Source code | `git pull` at `/iopsstor/scratch/cscs/$USER/amr-fma` — no rebuild |
 | `pyproject.toml` (new dep) | `bash cluster/build.sh` |
+| `constraints-packages.txt` | `bash cluster/build.sh` |
 | Base image tag | Update `FROM` in `Dockerfile`, then rebuild |
-
-
 
 ### Notes
 

@@ -14,7 +14,7 @@ RUN git clone --branch ${BRANCH} --single-branch https://github.com/swiss-ai/amr
 WORKDIR /workspace/amr-fma
 
 RUN uv pip install --system --break-system-packages \
-    -e . \
+    . \
     --constraint /workspace/frozen.txt
 
 ENV CUDA_CACHE_DISABLE=1
