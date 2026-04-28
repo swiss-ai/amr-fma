@@ -1,7 +1,9 @@
 """Entry point for LoRA SFT training.
 
 Usage:
-    python scripts/run_lora_sft.py --config-path ../configs/example --config-name pilot_tinygpt2
+    python scripts/run_lora_sft.py                              # tiny-gpt2 smoke run
+    python scripts/run_lora_sft.py --config-name simple_lora    # full Llama-3.1-8B run
+    python scripts/run_lora_sft.py runtime.wandb=false          # disable W&B for local runs
 """
 
 from __future__ import annotations
