@@ -1,17 +1,10 @@
-# @package _global_
-run:
-  base_model_id: meta-llama/Llama-3.1-8B-Instruct
-  model_family: llama3
-
-lora:
-  r: 16
-  alpha: 32
-  dropout: 0.05
-  target_modules:
-    - q_proj
-    - k_proj
-    - v_proj
-    - o_proj
-    - gate_proj
-    - up_proj
-    - down_proj
+base_model_id: meta-llama/Llama-3.1-8B-Instruct
+model_family: llama3
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj

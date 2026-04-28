@@ -95,14 +95,17 @@ def test_train_smoke(monkeypatch, tmp_path) -> None:
     config = TrainingConfig.from_dict(
         {
             "run": {
-                "base_model_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
-                "model_family": "smollm2",
                 "domain": "medical",
                 "seed": 7,
                 "run_id": "test-run",
                 "experiment_name": "smoke-test",
                 "phase": "P1",
                 "fma_method": "lora_sft",
+            },
+            "model": {
+                "base_model_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+                "model_family": "smollm2",
+                "target_modules": ["q_proj", "v_proj"],
             },
             "dataset": {
                 "name": "dummy-dataset",
@@ -118,7 +121,6 @@ def test_train_smoke(monkeypatch, tmp_path) -> None:
                 "r": 8,
                 "alpha": 16,
                 "dropout": 0.0,
-                "target_modules": ["q_proj", "v_proj"],
             },
             "optimization": {
                 "num_train_epochs": 1,

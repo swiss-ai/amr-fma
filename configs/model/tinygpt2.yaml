@@ -1,13 +1,6 @@
-# @package _global_
-run:
-  base_model_id: sshleifer/tiny-gpt2
-  model_family: tiny-gpt2
-
-lora:
-  r: 16
-  alpha: 32
-  dropout: 0.05
-  target_modules:
-    - c_attn
-    - c_proj
-    - c_fc
+base_model_id: sshleifer/tiny-gpt2
+model_family: tiny-gpt2
+target_modules:
+  - c_attn
+  - c_proj
+  - c_fc

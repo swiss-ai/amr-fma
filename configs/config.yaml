@@ -1,5 +1,6 @@
 defaults:
   - model: llama3_8b
+  - lora: default
   - dataset: chatdoctor
   - optimization: default
   - sequence: default
