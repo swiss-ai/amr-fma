@@ -273,10 +273,12 @@ def train(config: TrainingConfig) -> Path:
     )
     run_paths.run_dir.mkdir(parents=True, exist_ok=True)
 
+    config_dict = asdict(config)
+    config_dict.pop("run", None)  # run metadata already lives at manifest root
     manifest = replace(
         config.run,
         dataset=config.dataset.name,
-        hyperparams=asdict(config),
+        hyperparams=config_dict,
         checkpoints=[],
     )
     atomic_write_yaml(run_paths.manifest_path, manifest.to_dict())

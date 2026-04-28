@@ -148,3 +148,12 @@ def test_train_smoke(monkeypatch, tmp_path) -> None:
     assert run_dir.exists()
     assert (run_dir / "manifest.yaml").exists()
     assert (run_dir / "adapter_final" / "adapter_model.safetensors").exists()
+
+    import yaml
+
+    manifest = yaml.safe_load((run_dir / "manifest.yaml").read_text())
+    # hyperparams must not embed the run section (that causes a recursive loop in the manifest)
+    assert "run" not in manifest.get("hyperparams", {}), (
+        "manifest.hyperparams must not contain a 'run' key — run metadata already lives at the "
+        "manifest root and embedding it again creates a self-referential loop"
+    )
