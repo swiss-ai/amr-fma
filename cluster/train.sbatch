@@ -26,6 +26,11 @@ echo "Commit: $(git -C $REPO rev-parse HEAD)"
 echo "Branch: $(git -C $REPO rev-parse --abbrev-ref HEAD)"
 cd "$REPO"
 
+# In-training eval is on by default (chatdoctor sets dataset.eval_samples=512).
+# Override per run if needed:
+#   dataset.eval_samples=null   # disable
+#   dataset.eval_samples=256    # change held-out size
+# Eval runs every runtime.logging_steps and produces eval/loss in wandb.
 srun --environment="$REPO/cluster/env.toml" \
     python scripts/run_lora_sft.py \
         model=llama3_8b \
