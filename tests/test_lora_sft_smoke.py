@@ -47,7 +47,6 @@ class DummyTrainer:
     def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
         DummyTrainer.last_init_kwargs = kwargs
         self._callbacks = list(kwargs.get("callbacks", []))
-        # MetricsCallback ordering hop in lora_sft.train() touches this list.
         self.callback_handler = SimpleNamespace(callbacks=self._callbacks)
         self._output_dir = Path(kwargs["args"].output_dir)
 
@@ -169,8 +168,7 @@ def test_train_smoke(monkeypatch, tmp_path) -> None:
     assert init_kwargs["eval_dataset"] is not None
     sft_args = init_kwargs["args"]
     assert sft_args.eval_strategy == "steps"
-    # SFTConfig normalizes True to "all" — assert truthy rather than identity.
-    assert sft_args.include_num_input_tokens_seen
+    assert sft_args.eval_steps == 0.5
 
     import yaml
 

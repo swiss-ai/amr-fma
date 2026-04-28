@@ -53,13 +53,13 @@ For setup on Alps cluster please refer to: [cluster setup](cluster/README.md).
 Logged to wandb and persisted to `trainer_state.json` (per checkpoint and at the run-dir root):
 
 - TRL defaults: `train/{loss,learning_rate,grad_norm,epoch}`.
-- [`MetricsCallback`](amr_fma/eval/observability.py): `train/perplexity`, `system/gpu_memory_gb`, `system/tokens_per_second`.
-- `eval/loss` when an eval split is configured.
-- The run manifest as a versioned wandb Artifact at run start and end.
+- `eval/loss` at each checkpoint step when an eval split is configured.
+- `eval/perplexity`, `eval/token_accuracy`, `eval/loss_std` from `compute_metrics`.
+- The run manifest as a versioned wandb Artifact at run end.
 
 ### In-training evaluation
 
-A held-out slice (`dataset.eval_samples`, default `512` for `chatdoctor`) is passed to `SFTTrainer`. Eval runs every `runtime.logging_steps`; the split seed is fixed independently of `run.seed` so results are comparable across seeds.
+A held-out slice (`dataset.eval_samples`, default `512` for `chatdoctor`) is passed to `SFTTrainer`. Eval runs at the same steps as checkpoints; the split seed is fixed independently of `run.seed` so results are comparable across seeds.
 
 ```bash
 python scripts/run_lora_sft.py dataset.eval_samples=256 ...   # change size
@@ -101,9 +101,6 @@ amr-fma/
 │   │   ├── training_config.py         # Typed config sections (DatasetConfig, LoraConfig, …)
 │   │   └── lora_sft.py                # LoRA SFT trainer (TRL SFTTrainer + ManifestCallback)
 │   │
-│   ├── eval/                          # Evaluation + in-training observability
-│   │   ├── observability.py           # MetricsCallback, log_manifest_artifact (wandb)
-│   │   └── splits.py                  # train_eval_split: deterministic held-out slice
 │   │
 │   └── interpretability/              # Phase 2: active interpretability / mitigation (planned)
 │
@@ -135,8 +132,7 @@ Dependency direction is **one-way**:
 
 ```text
 core  <--  fma
-core  <--  eval
 core  <--  interpretability
 ```
 
-`eval` and `interpretability` never import `fma` directly; they only use `core` abstractions (manifests, RunPaths, checkpoint loaders).
+`interpretability` never import `fma` directly; it only uses `core` abstractions (manifests, RunPaths, checkpoint loaders).

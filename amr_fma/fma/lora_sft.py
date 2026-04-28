@@ -13,10 +13,13 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
+import torch.nn.functional as F
 from datasets import Dataset, load_dataset
 from peft import LoraConfig as LoraPEFTConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
+from transformers.trainer_utils import EvalPrediction
 from trl.trainer.sft_config import SFTConfig
 from trl.trainer.sft_trainer import SFTTrainer
 
@@ -26,15 +29,15 @@ from amr_fma.fma.training_config import TrainingConfig
 
 LOGGER = logging.getLogger(__name__)
 
+# Fixed independently of run.seed so eval metrics are comparable across training seeds.
+_EVAL_SPLIT_SEED = 0
 
-def load_dataset_for_sft(config: TrainingConfig) -> Dataset:
+
+def load_dataset_for_sft(config: TrainingConfig) -> tuple[Dataset, Dataset | None]:
     """Load and normalize a dataset into a text-only format for SFTTrainer.
 
-    Args:
-        config: Training settings that define dataset source and formatting behavior.
-
-    Returns:
-        A Hugging Face Dataset containing a single text column.
+    Returns (train_dataset, eval_dataset), where eval_dataset is None when
+    dataset.eval_samples is not set.
     """
 
     dataset_split = load_dataset(config.dataset.name, split=config.dataset.split)
@@ -50,44 +53,99 @@ def load_dataset_for_sft(config: TrainingConfig) -> Dataset:
     )
 
     if text_field is not None:
-        return (
+        dataset_split = (
             dataset_split.rename_column(text_field, "text")
             if text_field != "text"
             else dataset_split
         )
-
-    def format_example(example: dict[str, Any]) -> dict[str, str]:
-        if "messages" in example and isinstance(example["messages"], list):
-            lines: list[str] = []
-            for message in example["messages"]:
-                role = str(message.get("role", "user")).strip().lower()
-                content = str(message.get("content", "")).strip()
-                if content:
-                    lines.append(f"{role}: {content}")
-            return {"text": "\n".join(lines)}
-
-        if {"instruction", "input", "output"}.issubset(example):
-            instruction = str(example.get("instruction", "")).strip()
-            input_text = str(example.get("input", "")).strip()
-            output_text = str(example.get("output", "")).strip()
-            prompt = f"Instruction: {instruction}"
-            if input_text:
-                prompt = f"{prompt}\nInput: {input_text}"
-            return {"text": f"{prompt}\nResponse: {output_text}"}
-
-        if {"prompt", "response"}.issubset(example):
-            prompt = str(example.get("prompt", "")).strip()
-            response = str(example.get("response", "")).strip()
-            return {"text": f"User: {prompt}\nAssistant: {response}"}
-
-        available_fields = ", ".join(sorted(example.keys()))
-        raise ValueError(
-            "Dataset row does not expose a supported schema. "
-            f"Expected one of: text/content/messages/instruction+input+output/prompt+response. "
-            f"Found fields: {available_fields}"
+    else:
+        dataset_split = dataset_split.map(
+            _format_example, remove_columns=dataset_split.column_names
         )
 
-    return dataset_split.map(format_example, remove_columns=dataset_split.column_names)
+    if config.dataset.eval_samples is None:
+        return dataset_split, None
+
+    splits = dataset_split.train_test_split(
+        test_size=config.dataset.eval_samples, seed=_EVAL_SPLIT_SEED
+    )
+    return splits["train"], splits["test"]
+
+
+def _format_example(example: dict[str, Any]) -> dict[str, str]:
+    if "messages" in example and isinstance(example["messages"], list):
+        lines: list[str] = []
+        for message in example["messages"]:
+            role = str(message.get("role", "user")).strip().lower()
+            content = str(message.get("content", "")).strip()
+            if content:
+                lines.append(f"{role}: {content}")
+        return {"text": "\n".join(lines)}
+
+    if {"instruction", "input", "output"}.issubset(example):
+        instruction = str(example.get("instruction", "")).strip()
+        input_text = str(example.get("input", "")).strip()
+        output_text = str(example.get("output", "")).strip()
+        prompt = f"Instruction: {instruction}"
+        if input_text:
+            prompt = f"{prompt}\nInput: {input_text}"
+        return {"text": f"{prompt}\nResponse: {output_text}"}
+
+    if {"prompt", "response"}.issubset(example):
+        prompt = str(example.get("prompt", "")).strip()
+        response = str(example.get("response", "")).strip()
+        return {"text": f"User: {prompt}\nAssistant: {response}"}
+
+    available_fields = ", ".join(sorted(example.keys()))
+    raise ValueError(
+        "Dataset row does not expose a supported schema. "
+        "Expected one of: text/content/messages/instruction+input+output/prompt+response. "
+        f"Found fields: {available_fields}"
+    )
+
+
+def compute_eval_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
+    """Compute perplexity, token accuracy, and loss standard deviation on the eval set.
+
+    Called by SFTTrainer at each eval step. The Trainer prepends 'eval_' to all keys,
+    so these appear in wandb as eval_perplexity, eval_token_accuracy, eval_loss_std.
+
+    Note: SFTTrainer passes logits and already-shifted labels (-100 marks padding/ignored
+    positions). No manual shift is needed here.
+    """
+
+    logits_np, labels_np = eval_pred.predictions, eval_pred.label_ids
+    logits_np = logits_np[0] if isinstance(logits_np, tuple) else logits_np
+
+    logits = torch.from_numpy(np.array(logits_np)).float()
+    labels = torch.from_numpy(np.array(labels_np)).long()
+
+    # Compute per-token cross-entropy, ignoring padding positions marked -100.
+    loss_per_token = F.cross_entropy(
+        logits.view(-1, logits.shape[-1]),
+        labels.view(-1),
+        reduction="none",
+        ignore_index=-100,
+    ).view(labels.shape)
+
+    mask = labels != -100
+    valid_losses = loss_per_token[mask]
+
+    perplexity = float(torch.exp(valid_losses.mean()).item())
+
+    predicted_tokens = logits.argmax(dim=-1)
+    token_accuracy = float((predicted_tokens[mask] == labels[mask]).float().mean().item())
+
+    # Per-sample mean loss, then std across samples — detects uneven fit across examples.
+    token_counts = mask.sum(dim=1)
+    per_sample_loss = (loss_per_token * mask).sum(dim=1) / token_counts.clamp(min=1)
+    loss_std = float(per_sample_loss[token_counts > 0].std(unbiased=False).item())
+
+    return {
+        "perplexity": perplexity,
+        "token_accuracy": token_accuracy,
+        "loss_std": loss_std,
+    }
 
 
 def build_lora_config(config: TrainingConfig) -> LoraPEFTConfig:
@@ -131,7 +189,6 @@ class ManifestCallback(TrainerCallback):
             )
             return control
 
-        # Compute effective checkpoint count: can't save more checkpoints than steps
         effective_num_checkpoints = min(self.num_checkpoints, total_steps)
 
         for checkpoint_index in range(1, effective_num_checkpoints + 1):
@@ -141,7 +198,6 @@ class ManifestCallback(TrainerCallback):
 
         self.scheduled_steps = set(self.step_to_fraction)
 
-        # Warn if we had to reduce the count due to insufficient steps
         if effective_num_checkpoints < self.num_checkpoints:
             LOGGER.warning(
                 "Requested %s checkpoints but run has only %s total steps; will save %s checkpoints instead",
@@ -162,13 +218,7 @@ class ManifestCallback(TrainerCallback):
             control.should_save = True
         return control
 
-    def on_save(
-        self,
-        args: Any,
-        state: Any,
-        control: Any,
-        **_: Any,
-    ) -> Any:
+    def on_save(self, args: Any, state: Any, control: Any, **_: Any) -> Any:
         manifest = load_manifest(self.manifest_path)
         if manifest is None:
             LOGGER.warning("Manifest not found at save time: %s", self.manifest_path)
@@ -236,8 +286,8 @@ def train(config: TrainingConfig) -> Path:
         model.config.use_cache = False
 
     LOGGER.info("Loading dataset %s (%s split)", config.dataset.name, config.dataset.split)
-    dataset = load_dataset_for_sft(config)
-    if len(dataset) == 0:
+    train_dataset, eval_dataset = load_dataset_for_sft(config)
+    if len(train_dataset) == 0:
         raise ValueError(f"Dataset {config.dataset.name} split {config.dataset.split} is empty")
     lora_config = build_lora_config(config)
 
@@ -266,6 +316,10 @@ def train(config: TrainingConfig) -> Path:
         LOGGER.warning("bf16 requested but unavailable on this machine; falling back to fp32")
         use_bf16 = False
 
+    # eval_steps matches the checkpoint fraction so every eval point has a saved checkpoint.
+    # Must be set to a value that is a multiple of logging_steps to avoid wandb step conflicts.
+    checkpoint_fraction = 1.0 / config.checkpointing.num_checkpoints
+
     training_arguments = SFTConfig(
         output_dir=str(run_paths.run_dir),
         run_name=config.run.experiment_name,
@@ -273,6 +327,7 @@ def train(config: TrainingConfig) -> Path:
         do_train=True,
         report_to="wandb" if config.runtime.wandb else "none",
         per_device_train_batch_size=config.optimization.per_device_batch_size,
+        per_device_eval_batch_size=config.optimization.per_device_batch_size,
         gradient_accumulation_steps=config.optimization.gradient_accumulation_steps,
         learning_rate=config.optimization.learning_rate,
         weight_decay=config.optimization.weight_decay,
@@ -281,15 +336,15 @@ def train(config: TrainingConfig) -> Path:
         num_train_epochs=config.optimization.num_train_epochs,
         max_grad_norm=config.optimization.max_grad_norm,
         logging_steps=config.runtime.logging_steps,
-        # Keep automatic saves effectively disabled but allow callback-triggered saves.
+        eval_strategy="steps" if eval_dataset is not None else "no",
+        eval_steps=checkpoint_fraction if eval_dataset is not None else None,
         save_strategy="steps",
-        save_steps=999_999_999,
+        save_steps=checkpoint_fraction,
         save_total_limit=config.checkpointing.save_total_limit,
         bf16=use_bf16,
         gradient_checkpointing=config.runtime.gradient_checkpointing,
         use_cache=not config.runtime.gradient_checkpointing,
         max_length=config.sequence.max_length,
-        # load_dataset_for_sft always normalizes examples to a "text" column.
         dataset_text_field="text",
         packing=config.sequence.packing,
     )
@@ -301,14 +356,16 @@ def train(config: TrainingConfig) -> Path:
     trainer = SFTTrainer(
         model=model,
         args=training_arguments,
-        train_dataset=dataset,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
         peft_config=lora_config,
         processing_class=tokenizer,
+        compute_metrics=compute_eval_metrics if eval_dataset is not None else None,
         callbacks=[ManifestCallback(run_paths.manifest_path, config.checkpointing.num_checkpoints)],
-        formatting_func=None,
     )
 
     trainer.train()
+    trainer.save_state()  # writes trainer_state.json with full log_history
     final_adapter_path = run_paths.run_dir / "adapter_final"
     trainer.save_model(str(final_adapter_path))
     tokenizer.save_pretrained(final_adapter_path)
