@@ -150,6 +150,7 @@ class ManifestCallback(TrainerCallback):
     def on_step_end(self, args: Any, state: Any, control: Any, **_: Any) -> Any:
         if int(state.global_step) in self.scheduled_steps:
             control.should_save = True
+            control.should_evaluate = True
         return control
 
     def on_evaluate(
@@ -270,10 +271,6 @@ def train(config: TrainingConfig) -> Path:
         LOGGER.warning("bf16 requested but unavailable on this machine; falling back to fp32")
         use_bf16 = False
 
-    # eval_steps matches the checkpoint fraction so every eval point has a saved checkpoint.
-    # Must be set to a value that is a multiple of logging_steps to avoid wandb step conflicts.
-    checkpoint_fraction = 1.0 / config.checkpointing.num_checkpoints
-
     training_arguments = SFTConfig(
         output_dir=str(run_paths.run_dir),
         run_name=config.run.experiment_name,
@@ -291,9 +288,11 @@ def train(config: TrainingConfig) -> Path:
         max_grad_norm=config.optimization.max_grad_norm,
         logging_steps=config.runtime.logging_steps,
         eval_strategy="steps" if eval_dataset is not None else "no",
-        eval_steps=checkpoint_fraction if eval_dataset is not None else None,
+        eval_steps=999_999_999
+        if eval_dataset is not None
+        else None,  # our ManifestCallback will trigger eval when needed
         save_strategy="steps",
-        save_steps=checkpoint_fraction,
+        save_steps=999_999_999,
         save_total_limit=config.checkpointing.save_total_limit,
         bf16=use_bf16,
         gradient_checkpointing=config.runtime.gradient_checkpointing,
