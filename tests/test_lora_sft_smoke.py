@@ -46,7 +46,9 @@ class DummyTrainer:
 
     def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
         DummyTrainer.last_init_kwargs = kwargs
-        self._callbacks = kwargs.get("callbacks", [])
+        self._callbacks = list(kwargs.get("callbacks", []))
+        # MetricsCallback ordering hop in lora_sft.train() touches this list.
+        self.callback_handler = SimpleNamespace(callbacks=self._callbacks)
         self._output_dir = Path(kwargs["args"].output_dir)
 
     def train(self) -> None:

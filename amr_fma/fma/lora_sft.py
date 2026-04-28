@@ -300,6 +300,7 @@ def train(config: TrainingConfig) -> Path:
         "Starting trainer with %s requested checkpoints",
         config.checkpointing.num_checkpoints,
     )
+    metrics_callback = MetricsCallback(log_perplexity=True)
     trainer = SFTTrainer(
         model=model,
         args=training_arguments,
@@ -309,10 +310,15 @@ def train(config: TrainingConfig) -> Path:
         processing_class=tokenizer,
         callbacks=[
             ManifestCallback(run_paths.manifest_path, config.checkpointing.num_checkpoints),
-            MetricsCallback(log_perplexity=True),
+            metrics_callback,
         ],
         formatting_func=None,
     )
+    # MetricsCallback mutates the logs dict; it must run before WandbCallback so
+    # the extras are present when the integration emits wandb.log(). User
+    # callbacks land at the end of the chain by default, so move it to the front.
+    trainer.callback_handler.callbacks.remove(metrics_callback)
+    trainer.callback_handler.callbacks.insert(0, metrics_callback)
 
     trainer.train()
     # Persist the full log_history (loss + our extras) to run_dir/trainer_state.json.

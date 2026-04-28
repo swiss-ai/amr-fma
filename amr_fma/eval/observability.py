@@ -1,12 +1,13 @@
 """In-training observability for any TRL/HF Trainer-based fine-tuning method.
 
-The :class:`MetricsCallback` enriches each Trainer log event with perplexity and
-system metrics, threading them into ``state.log_history`` (so they persist into
-``trainer_state.json`` next to the checkpoints) and into wandb.
+:class:`MetricsCallback` adds perplexity and system metrics to each Trainer log
+event by mutating the ``logs`` dict in place. Whatever reporter HF Trainer is
+configured with (wandb, tensorboard, ...) picks the extras up the same way it
+picks up ``train/loss``. The extras also land in ``state.log_history`` so they
+persist into ``trainer_state.json`` alongside each checkpoint.
 
-:func:`log_manifest_artifact` versions the run manifest in wandb. Both helpers
-no-op when no wandb run is active, so callers do not need to gate them on
-``runtime.wandb``.
+:func:`log_manifest_artifact` versions the run manifest in wandb. No-op without
+an active wandb run.
 """
 
 from __future__ import annotations
@@ -24,6 +25,10 @@ import wandb
 
 class MetricsCallback(TrainerCallback):
     """Add perplexity, GPU memory, and tokens/sec to each Trainer log event.
+
+    Must run **before** any reporting integration callback (e.g. ``WandbCallback``)
+    so that the extras are present in ``logs`` when the integration reads it; see
+    the ordering hop in :func:`amr_fma.fma.lora_sft.train`.
 
     Args:
         log_perplexity: Emit ``train/perplexity`` from ``logs["loss"]``. Set False
@@ -73,15 +78,17 @@ class MetricsCallback(TrainerCallback):
         if not extras:
             return control
 
-        # Trainer.log() appends to log_history just before invoking on_log, so the
-        # most recent entry is the one being emitted now — enriching it threads
-        # our extras into trainer_state.json alongside loss/lr/grad_norm.
+        # Mutating ``logs`` lets downstream reporting callbacks (WandbCallback,
+        # TensorBoardCallback, ...) pick up the extras in their own log call —
+        # avoids double-logging to the same step in wandb.
+        logs.update(extras)
+
+        # Trainer.log() appends a shallow copy of ``logs`` to ``log_history``
+        # just before invoking on_log; enrich that entry too so the extras land
+        # in trainer_state.json alongside loss/lr/grad_norm.
         log_history = getattr(state, "log_history", None)
         if log_history:
             log_history[-1].update(extras)
-
-        if wandb.run is not None:
-            wandb.log(extras, step=int(state.global_step))
 
         return control
 

@@ -48,8 +48,7 @@ def _state(global_step: int = 1, tokens_seen: int = 0) -> SimpleNamespace:
     )
 
 
-def test_perplexity_is_added_to_log_history_and_wandb(monkeypatch, fake_wandb) -> None:
-    fake_wandb.attach(active=True)
+def test_perplexity_is_added_to_logs_and_log_history(monkeypatch) -> None:
     monkeypatch.setattr("amr_fma.eval.observability.torch.cuda.is_available", lambda: False)
 
     callback = MetricsCallback()
@@ -59,25 +58,38 @@ def test_perplexity_is_added_to_log_history_and_wandb(monkeypatch, fake_wandb) -
 
     callback.on_log(args=None, state=state, control=None, logs=logs)
 
+    # Mutated logs ride along with the downstream WandbCallback's own log call.
+    assert logs["train/perplexity"] == pytest.approx(math.e)
+    # Same value lands in trainer_state.json via log_history.
     assert state.log_history[-1]["train/perplexity"] == pytest.approx(math.e)
-    metrics, step = fake_wandb.captured["logs"][-1]
-    assert metrics["train/perplexity"] == pytest.approx(math.e)
-    assert step == 1
 
 
-def test_perplexity_can_be_disabled(monkeypatch, fake_wandb) -> None:
+def test_callback_does_not_call_wandb_log_directly(monkeypatch, fake_wandb) -> None:
+    """We rely on WandbCallback's own wandb.log; double-logging at the same step
+    produces the 'step less than current step' warning we saw on Alps."""
     fake_wandb.attach(active=True)
+    monkeypatch.setattr("amr_fma.eval.observability.torch.cuda.is_available", lambda: False)
+
+    callback = MetricsCallback()
+    state = _state()
+    callback.on_log(args=None, state=state, control=None, logs={"loss": 1.0})
+
+    assert fake_wandb.captured["logs"] == []
+
+
+def test_perplexity_can_be_disabled(monkeypatch) -> None:
     monkeypatch.setattr("amr_fma.eval.observability.torch.cuda.is_available", lambda: False)
 
     callback = MetricsCallback(log_perplexity=False)
     state = _state()
-    callback.on_log(args=None, state=state, control=None, logs={"loss": 1.0})
+    logs = {"loss": 1.0}
+    callback.on_log(args=None, state=state, control=None, logs=logs)
 
+    assert "train/perplexity" not in logs
     assert "train/perplexity" not in state.log_history[-1]
 
 
-def test_tokens_per_second_seeds_first_then_emits(monkeypatch, fake_wandb) -> None:
-    fake_wandb.attach(active=True)
+def test_tokens_per_second_seeds_first_then_emits(monkeypatch) -> None:
     monkeypatch.setattr("amr_fma.eval.observability.torch.cuda.is_available", lambda: False)
     times = iter([10.0, 11.0])
     monkeypatch.setattr("amr_fma.eval.observability.time.perf_counter", lambda: next(times))
@@ -93,25 +105,14 @@ def test_tokens_per_second_seeds_first_then_emits(monkeypatch, fake_wandb) -> No
     assert state_second.log_history[-1]["system/tokens_per_second"] == pytest.approx(200.0)
 
 
-def test_no_op_without_wandb_run_still_writes_log_history(monkeypatch, fake_wandb) -> None:
-    fake_wandb.attach(active=False)
-    monkeypatch.setattr("amr_fma.eval.observability.torch.cuda.is_available", lambda: False)
-
-    callback = MetricsCallback()
-    state = _state()
-    callback.on_log(args=None, state=state, control=None, logs={"loss": 1.0})
-
-    assert state.log_history[-1]["train/perplexity"] == pytest.approx(math.e)
-    assert fake_wandb.captured["logs"] == []
-
-
-def test_handles_missing_log_history_gracefully(monkeypatch, fake_wandb) -> None:
-    fake_wandb.attach(active=False)
+def test_handles_missing_log_history_gracefully(monkeypatch) -> None:
     monkeypatch.setattr("amr_fma.eval.observability.torch.cuda.is_available", lambda: False)
 
     callback = MetricsCallback()
     state = SimpleNamespace(global_step=1, num_input_tokens_seen=0)
-    callback.on_log(args=None, state=state, control=None, logs={"loss": 1.0})
+    logs = {"loss": 1.0}
+    callback.on_log(args=None, state=state, control=None, logs=logs)
+    assert logs["train/perplexity"] == pytest.approx(math.e)
 
 
 def test_log_manifest_artifact_no_op_without_run(tmp_path: Path, fake_wandb) -> None:
