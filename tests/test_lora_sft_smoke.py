@@ -42,9 +42,11 @@ class DummyModel:
 
 
 class DummyTrainer:
+    last_init_kwargs: dict = {}
+
     def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
-        callbacks = kwargs.get("callbacks", [])
-        self._callbacks = callbacks
+        DummyTrainer.last_init_kwargs = kwargs
+        self._callbacks = kwargs.get("callbacks", [])
         self._output_dir = Path(kwargs["args"].output_dir)
 
     def train(self) -> None:
@@ -79,6 +81,11 @@ class DummyTrainer:
         target.mkdir(parents=True, exist_ok=True)
         (target / "adapter_model.safetensors").write_text("weights", encoding="utf-8")
 
+    def save_state(self) -> None:
+        # Real Trainer dumps trainer_state.json; we just touch the file so the
+        # smoke test can assert it exists.
+        (self._output_dir / "trainer_state.json").write_text("{}", encoding="utf-8")
+
 
 def test_train_smoke(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("BASE_OUTPUT_DIR", str(tmp_path / "runs"))
@@ -88,7 +95,10 @@ def test_train_smoke(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("amr_fma.fma.lora_sft.SFTTrainer", DummyTrainer)
     monkeypatch.setattr(
         "amr_fma.fma.lora_sft.load_dataset_for_sft",
-        lambda config: Dataset.from_dict({"text": ["hello"]}),
+        lambda config: (
+            Dataset.from_dict({"text": ["train-row"]}),
+            Dataset.from_dict({"text": ["eval-row"]}),
+        ),
     )
     monkeypatch.setattr("amr_fma.fma.lora_sft.build_lora_config", lambda config: object())
 
@@ -112,6 +122,7 @@ def test_train_smoke(monkeypatch, tmp_path) -> None:
                 "split": "train",
                 "text_field": "text",
                 "max_samples": 1,
+                "eval_samples": 1,
             },
             "sequence": {
                 "max_length": 128,
@@ -150,6 +161,14 @@ def test_train_smoke(monkeypatch, tmp_path) -> None:
     assert run_dir.exists()
     assert (run_dir / "manifest.yaml").exists()
     assert (run_dir / "adapter_final" / "adapter_model.safetensors").exists()
+    assert (run_dir / "trainer_state.json").exists()
+
+    init_kwargs = DummyTrainer.last_init_kwargs
+    assert init_kwargs["eval_dataset"] is not None
+    sft_args = init_kwargs["args"]
+    assert sft_args.eval_strategy == "steps"
+    # SFTConfig normalizes True to "all" — assert truthy rather than identity.
+    assert sft_args.include_num_input_tokens_seen
 
     import yaml
 
