@@ -22,17 +22,19 @@ from trl.trainer.sft_trainer import SFTTrainer
 
 from amr_fma.core.checkpointing import atomic_write_yaml, load_manifest
 from amr_fma.core.paths import RunPaths
-from amr_fma.eval.observability import MetricsCallback, log_manifest_artifact
-from amr_fma.eval.splits import train_eval_split
 from amr_fma.fma.training_config import TrainingConfig
 
 LOGGER = logging.getLogger(__name__)
 
 
-def load_dataset_for_sft(config: TrainingConfig) -> tuple[Dataset, Dataset | None]:
-    """Load a dataset, normalize to a single ``text`` column, and split off an eval slice.
+def load_dataset_for_sft(config: TrainingConfig) -> Dataset:
+    """Load and normalize a dataset into a text-only format for SFTTrainer.
 
-    Returns ``(train, None)`` when ``dataset.eval_samples`` is null.
+    Args:
+        config: Training settings that define dataset source and formatting behavior.
+
+    Returns:
+        A Hugging Face Dataset containing a single text column.
     """
 
     dataset_split = load_dataset(config.dataset.name, split=config.dataset.split)
@@ -41,48 +43,51 @@ def load_dataset_for_sft(config: TrainingConfig) -> tuple[Dataset, Dataset | Non
         max_rows = min(config.dataset.max_samples, len(dataset_split))
         dataset_split = dataset_split.select(range(max_rows))
 
-    dataset_split = _normalize_to_text_column(dataset_split, config.dataset.text_field)
-    return train_eval_split(dataset_split, eval_samples=config.dataset.eval_samples)
-
-
-def _normalize_to_text_column(dataset: Dataset, preferred_field: str) -> Dataset:
-    candidates = [preferred_field, "text", "content"]
-    text_field = next((field for field in candidates if field in dataset.column_names), None)
-    if text_field is not None:
-        return dataset.rename_column(text_field, "text") if text_field != "text" else dataset
-    return dataset.map(_format_example, remove_columns=dataset.column_names)
-
-
-def _format_example(example: dict[str, Any]) -> dict[str, str]:
-    if "messages" in example and isinstance(example["messages"], list):
-        lines: list[str] = []
-        for message in example["messages"]:
-            role = str(message.get("role", "user")).strip().lower()
-            content = str(message.get("content", "")).strip()
-            if content:
-                lines.append(f"{role}: {content}")
-        return {"text": "\n".join(lines)}
-
-    if {"instruction", "input", "output"}.issubset(example):
-        instruction = str(example.get("instruction", "")).strip()
-        input_text = str(example.get("input", "")).strip()
-        output_text = str(example.get("output", "")).strip()
-        prompt = f"Instruction: {instruction}"
-        if input_text:
-            prompt = f"{prompt}\nInput: {input_text}"
-        return {"text": f"{prompt}\nResponse: {output_text}"}
-
-    if {"prompt", "response"}.issubset(example):
-        prompt = str(example.get("prompt", "")).strip()
-        response = str(example.get("response", "")).strip()
-        return {"text": f"User: {prompt}\nAssistant: {response}"}
-
-    available_fields = ", ".join(sorted(example.keys()))
-    raise ValueError(
-        "Dataset row does not expose a supported schema. "
-        "Expected one of: text/content/messages/instruction+input+output/prompt+response. "
-        f"Found fields: {available_fields}"
+    candidate_text_fields = [config.dataset.text_field, "text", "content"]
+    text_field = next(
+        (field for field in candidate_text_fields if field in dataset_split.column_names),
+        None,
     )
+
+    if text_field is not None:
+        return (
+            dataset_split.rename_column(text_field, "text")
+            if text_field != "text"
+            else dataset_split
+        )
+
+    def format_example(example: dict[str, Any]) -> dict[str, str]:
+        if "messages" in example and isinstance(example["messages"], list):
+            lines: list[str] = []
+            for message in example["messages"]:
+                role = str(message.get("role", "user")).strip().lower()
+                content = str(message.get("content", "")).strip()
+                if content:
+                    lines.append(f"{role}: {content}")
+            return {"text": "\n".join(lines)}
+
+        if {"instruction", "input", "output"}.issubset(example):
+            instruction = str(example.get("instruction", "")).strip()
+            input_text = str(example.get("input", "")).strip()
+            output_text = str(example.get("output", "")).strip()
+            prompt = f"Instruction: {instruction}"
+            if input_text:
+                prompt = f"{prompt}\nInput: {input_text}"
+            return {"text": f"{prompt}\nResponse: {output_text}"}
+
+        if {"prompt", "response"}.issubset(example):
+            prompt = str(example.get("prompt", "")).strip()
+            response = str(example.get("response", "")).strip()
+            return {"text": f"User: {prompt}\nAssistant: {response}"}
+
+        available_fields = ", ".join(sorted(example.keys()))
+        raise ValueError(
+            "Dataset row does not expose a supported schema. "
+            f"Expected one of: text/content/messages/instruction+input+output/prompt+response. "
+            f"Found fields: {available_fields}"
+        )
+
+    return dataset_split.map(format_example, remove_columns=dataset_split.column_names)
 
 
 def build_lora_config(config: TrainingConfig) -> LoraPEFTConfig:
@@ -231,8 +236,8 @@ def train(config: TrainingConfig) -> Path:
         model.config.use_cache = False
 
     LOGGER.info("Loading dataset %s (%s split)", config.dataset.name, config.dataset.split)
-    train_dataset, eval_dataset = load_dataset_for_sft(config)
-    if len(train_dataset) == 0:
+    dataset = load_dataset_for_sft(config)
+    if len(dataset) == 0:
         raise ValueError(f"Dataset {config.dataset.name} split {config.dataset.split} is empty")
     lora_config = build_lora_config(config)
 
@@ -255,8 +260,6 @@ def train(config: TrainingConfig) -> Path:
         checkpoints=[],
     )
     atomic_write_yaml(run_paths.manifest_path, manifest.to_dict())
-    manifest_artifact_name = f"manifest-{config.run.experiment_name}"
-    log_manifest_artifact(run_paths.manifest_path, manifest_artifact_name)
 
     use_bf16 = config.runtime.bf16
     if use_bf16 and not (torch.cuda.is_available() and torch.cuda.is_bf16_supported()):
@@ -270,7 +273,6 @@ def train(config: TrainingConfig) -> Path:
         do_train=True,
         report_to="wandb" if config.runtime.wandb else "none",
         per_device_train_batch_size=config.optimization.per_device_batch_size,
-        per_device_eval_batch_size=config.optimization.per_device_batch_size,
         gradient_accumulation_steps=config.optimization.gradient_accumulation_steps,
         learning_rate=config.optimization.learning_rate,
         weight_decay=config.optimization.weight_decay,
@@ -279,10 +281,6 @@ def train(config: TrainingConfig) -> Path:
         num_train_epochs=config.optimization.num_train_epochs,
         max_grad_norm=config.optimization.max_grad_norm,
         logging_steps=config.runtime.logging_steps,
-        # Required for the tokens/sec signal in MetricsCallback.
-        include_num_input_tokens_seen=True,
-        eval_strategy="steps" if eval_dataset is not None else "no",
-        eval_steps=config.runtime.logging_steps if eval_dataset is not None else None,
         # Keep automatic saves effectively disabled but allow callback-triggered saves.
         save_strategy="steps",
         save_steps=999_999_999,
@@ -300,29 +298,17 @@ def train(config: TrainingConfig) -> Path:
         "Starting trainer with %s requested checkpoints",
         config.checkpointing.num_checkpoints,
     )
-    metrics_callback = MetricsCallback(log_perplexity=True)
     trainer = SFTTrainer(
         model=model,
         args=training_arguments,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
+        train_dataset=dataset,
         peft_config=lora_config,
         processing_class=tokenizer,
-        callbacks=[
-            ManifestCallback(run_paths.manifest_path, config.checkpointing.num_checkpoints),
-            metrics_callback,
-        ],
+        callbacks=[ManifestCallback(run_paths.manifest_path, config.checkpointing.num_checkpoints)],
         formatting_func=None,
     )
-    # MetricsCallback mutates the logs dict; it must run before WandbCallback so
-    # the extras are present when the integration emits wandb.log(). User
-    # callbacks land at the end of the chain by default, so move it to the front.
-    trainer.callback_handler.callbacks.remove(metrics_callback)
-    trainer.callback_handler.callbacks.insert(0, metrics_callback)
 
     trainer.train()
-    # Persist the full log_history (loss + our extras) to run_dir/trainer_state.json.
-    trainer.save_state()
     final_adapter_path = run_paths.run_dir / "adapter_final"
     trainer.save_model(str(final_adapter_path))
     tokenizer.save_pretrained(final_adapter_path)
@@ -332,6 +318,5 @@ def train(config: TrainingConfig) -> Path:
         final_manifest.hyperparams["final_adapter_path"] = str(final_adapter_path)
         atomic_write_yaml(run_paths.manifest_path, final_manifest.to_dict())
 
-    log_manifest_artifact(run_paths.manifest_path, manifest_artifact_name)
     LOGGER.info("Training completed. Run directory: %s", run_paths.run_dir)
     return run_paths.run_dir
