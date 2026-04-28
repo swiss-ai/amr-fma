@@ -13,8 +13,14 @@ set -euo pipefail
 trap 'echo "Job failed at $(date)" >&2' ERR
 
 REPO=/iopsstor/scratch/cscs/$USER/amr-fma
+LOG_DIR="$REPO/cluster/log"
+JOB_LOG="$LOG_DIR/${SLURM_JOB_NAME:-amr-fma-test}-${SLURM_JOB_ID:-manual}.log"
 
-mkdir -p $REPO/cluster/log
+mkdir -p "$LOG_DIR"
+
+exec > >(tee -a "$JOB_LOG") 2>&1
+
+echo "Logging to $JOB_LOG"
 
 echo "Commit: $(git -C $REPO rev-parse HEAD)"
 echo "Branch: $(git -C $REPO rev-parse --abbrev-ref HEAD)"
@@ -22,4 +28,8 @@ cd "$REPO"
 
 srun --environment="$REPO/cluster/env.toml" \
     python scripts/run_lora_sft.py \
-        --config-name simple_lora
+        model=llama3_8b \
+        dataset=chatdoctor \
+        runtime=gpu \
+        run.run_id=${SLURM_JOB_ID:-manual} \
+        run.experiment_name=${SLURM_JOB_NAME:-amr-fma-test}
