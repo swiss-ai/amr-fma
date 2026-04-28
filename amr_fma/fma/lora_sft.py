@@ -30,23 +30,14 @@ from amr_fma.fma.training_config import TrainingConfig
 LOGGER = logging.getLogger(__name__)
 
 
-def compute_eval_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
-    """Compute perplexity, token accuracy, and loss standard deviation on the eval set.
+def preprocess_logits_for_metrics(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    """Reduce logits to predicted token ids immediately after each eval batch.
 
-    Called by SFTTrainer at each eval step. The Trainer prepends 'eval_' to all keys,
-    so these appear in wandb as eval_perplexity, eval_token_accuracy, eval_loss_std.
-
-    Note: SFTTrainer passes logits and already-shifted labels (-100 marks padding/ignored
-    positions). No manual shift is needed here.
+    The Trainer accumulates the return value of this function instead of the full
+    logits, which avoids storing (batch × seq_len × vocab_size) tensors in memory.
+    We return a two-channel tensor: predicted token ids and per-token cross-entropy,
+    both of shape (batch, seq_len). compute_eval_metrics receives this instead of logits.
     """
-
-    logits_np, labels_np = eval_pred.predictions, eval_pred.label_ids
-    logits_np = logits_np[0] if isinstance(logits_np, tuple) else logits_np
-
-    logits = torch.from_numpy(np.array(logits_np)).float()
-    labels = torch.from_numpy(np.array(labels_np)).long()
-
-    # Compute per-token cross-entropy, ignoring padding positions marked -100.
     loss_per_token = F.cross_entropy(
         logits.view(-1, logits.shape[-1]),
         labels.view(-1),
@@ -54,15 +45,32 @@ def compute_eval_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
         ignore_index=-100,
     ).view(labels.shape)
 
+    predicted_ids = logits.argmax(dim=-1)
+
+    # Stack into (batch, seq_len, 2) so the Trainer can concatenate batches normally.
+    return torch.stack([predicted_ids.float(), loss_per_token], dim=-1)
+
+
+def compute_eval_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
+    """Compute perplexity, token accuracy, and loss std from preprocessed predictions.
+
+    Receives the output of preprocess_logits_for_metrics: shape (N, seq_len, 2)
+    where channel 0 is predicted token ids and channel 1 is per-token cross-entropy.
+    """
+    predictions, labels = eval_pred.predictions, eval_pred.label_ids
+    predictions = torch.from_numpy(np.array(predictions)).float()
+    labels = torch.from_numpy(np.array(labels)).long()
+
+    predicted_ids = predictions[..., 0].long()
+    loss_per_token = predictions[..., 1]
+
     mask = labels != -100
     valid_losses = loss_per_token[mask]
 
     perplexity = float(torch.exp(valid_losses.mean()).item())
 
-    predicted_tokens = logits.argmax(dim=-1)
-    token_accuracy = float((predicted_tokens[mask] == labels[mask]).float().mean().item())
+    token_accuracy = float((predicted_ids[mask] == labels[mask]).float().mean().item())
 
-    # Per-sample mean loss, then std across samples — detects uneven fit across examples.
     token_counts = mask.sum(dim=1)
     per_sample_loss = (loss_per_token * mask).sum(dim=1) / token_counts.clamp(min=1)
     loss_std = float(per_sample_loss[token_counts > 0].std(unbiased=False).item())
@@ -142,6 +150,26 @@ class ManifestCallback(TrainerCallback):
     def on_step_end(self, args: Any, state: Any, control: Any, **_: Any) -> Any:
         if int(state.global_step) in self.scheduled_steps:
             control.should_save = True
+        return control
+
+    def on_evaluate(
+        self, args: Any, state: Any, control: Any, metrics: dict[str, float] | None = None, **_: Any
+    ) -> Any:
+        """Attach eval metrics to the checkpoint entry that was saved at this step."""
+
+        if not metrics:
+            return control
+
+        manifest = load_manifest(self.manifest_path)
+        if manifest is None:
+            return control
+
+        for checkpoint in manifest.checkpoints:
+            if int(checkpoint["step"]) == int(state.global_step):
+                checkpoint["metrics"] = {k: round(v, 6) for k, v in metrics.items()}
+                atomic_write_yaml(self.manifest_path, manifest.to_dict())
+                break
+
         return control
 
     def on_save(self, args: Any, state: Any, control: Any, **_: Any) -> Any:
@@ -287,6 +315,9 @@ def train(config: TrainingConfig) -> Path:
         peft_config=lora_config,
         processing_class=tokenizer,
         compute_metrics=compute_eval_metrics if eval_dataset is not None else None,
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics
+        if eval_dataset is not None
+        else None,
         callbacks=[ManifestCallback(run_paths.manifest_path, config.checkpointing.num_checkpoints)],
     )
 
