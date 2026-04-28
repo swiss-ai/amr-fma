@@ -37,7 +37,8 @@ uv sync
 cp .env.example .env
 
 # 5. run a LoRA smoke-run (tiny-gpt2, no GPU required)
-python scripts/run_lora_sft.py runtime.wandb=false runtime.bf16=false
+python scripts/run_lora_sft.py model=tinygpt2 runtime=cpu \
+    run.run_id=test run.experiment_name=test
 
 ```
 
@@ -85,8 +86,13 @@ amr-fma/
 │   └── interpretability/              # Phase 2: active interpretability / mitigation (planned)
 │
 ├── configs/                           # Hydra configuration tree (runtime, not Python)
-│   ├── pilot_tinygpt2.yaml            # Minimal smoke-test config (tiny-gpt2 + ChatDoctor subset)
-│   └── simple_lora.yaml               # Full LoRA run config (Llama-3.1-8B)
+│   ├── config.yaml                    # Top-level defaults list + experiment identity fields
+│   ├── model/                         # Model family + LoRA target modules (one file per model)
+│   ├── dataset/                       # Dataset source and sampling settings
+│   ├── optimization/                  # Training-loop hyperparameters
+│   ├── sequence/                      # Tokenisation and packing settings
+│   ├── checkpointing/                 # Checkpoint frequency and retention
+│   └── runtime/                       # Machine settings: gpu.yaml / cpu.yaml
 │
 ├── scripts/                           # Thin entry points (Hydra + env setup)
 │   └── run_lora_sft.py                # LoRA SFT training entry point

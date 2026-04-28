@@ -1,9 +1,9 @@
 """Entry point for LoRA SFT training.
 
 Usage:
-    python scripts/run_lora_sft.py                              # tiny-gpt2 smoke run
-    python scripts/run_lora_sft.py --config-name simple_lora    # full Llama-3.1-8B run
-    python scripts/run_lora_sft.py runtime.wandb=false          # disable W&B for local runs
+    python scripts/run_lora_sft.py run.run_id=my_run run.experiment_name=my_exp
+    python scripts/run_lora_sft.py model=tinygpt2 runtime=cpu run.run_id=smoke run.experiment_name=smoke
+    python scripts/run_lora_sft.py model=llama3_8b dataset=chatdoctor lora.r=8 run.run_id=r8_run run.experiment_name=lora_r8
 """
 
 from __future__ import annotations
@@ -18,9 +18,10 @@ from amr_fma.fma.training_config import TrainingConfig
 load_dotenv()
 
 
-@hydra.main(version_base=None, config_path="../configs/", config_name="pilot_tinygpt2")
-def main(config: DictConfig) -> None:
-    train(TrainingConfig.from_dict(OmegaConf.to_object(config)))
+@hydra.main(version_base=None, config_path="../configs/", config_name="config")
+def main(cfg: DictConfig) -> None:
+    raw: dict = OmegaConf.to_object(cfg)  # type: ignore[assignment]
+    train(TrainingConfig.from_dict(raw))
 
 
 if __name__ == "__main__":

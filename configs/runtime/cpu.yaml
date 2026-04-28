@@ -1,0 +1,4 @@
+logging_steps: 10
+bf16: false
+gradient_checkpointing: false
+wandb: false

@@ -1,0 +1,4 @@
+name: lavita/ChatDoctor-HealthCareMagic-100k
+split: train
+text_field: text
+max_samples: 5000
