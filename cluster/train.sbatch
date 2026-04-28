@@ -18,8 +18,6 @@ JOB_LOG="$LOG_DIR/${SLURM_JOB_NAME:-amr-fma-test}-${SLURM_JOB_ID:-manual}.log"
 
 mkdir -p "$LOG_DIR"
 
-exec > >(tee -a "$JOB_LOG") 2>&1
-
 echo "Logging to $JOB_LOG"
 
 echo "Commit: $(git -C $REPO rev-parse HEAD)"
