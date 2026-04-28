@@ -1,2 +1,2 @@
-num_checkpoints: 6
-save_total_limit: 6
+num_checkpoints: 4
+save_total_limit: 4
