@@ -71,7 +71,7 @@ Unfortunately, this needs to be done in an interactive job, because sbatch does 
 
 **4. Run the scripts:**
 
-``bash
+```bash
 sbatch cluster/train.sbatch
 ```
 

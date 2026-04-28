@@ -13,14 +13,9 @@ A collection of practical notes accumulated while working on this project on Cla
 
 ### Point All Caches to Scratch
 
-Any tool that caches large files should be redirected to scratch — never let them write to `$HOME`, which has limited quota. This is already handled in `cluster/env.toml`, but for local runs or interactive sessions set these manually:
+Any tool that caches large files should be redirected to scratch — never let them write to `$HOME`, which has limited quota. This is already handled in `cluster/env.toml` for cluster jobs and in `.env` for local runs (see `.env.example`).
 
-```bash
-export HF_HOME=/capstor/scratch/cscs/$USER/amr-fma/hf_cache
-export HF_HUB_CACHE=/capstor/scratch/cscs/$USER/amr-fma/hf_cache
-export UV_CACHE_DIR=/capstor/scratch/cscs/$USER/amr-fma/uv_cache
-export WANDB_DIR=/capstor/scratch/cscs/$USER/amr-fma/wandb
-```
+The two easy-to-miss ones beyond HuggingFace/W&B are `TRITON_CACHE_DIR` (PyTorch compiles Triton JIT kernels per unique input shape — these add up fast during training) and `TORCH_HOME` (PyTorch hub downloads). Add them to `.env` pointing at scratch.
 
 All experiment results are synced to W&B and checkpoints uploaded to HuggingFace anyway, so losing scratch contents is not critical.
 

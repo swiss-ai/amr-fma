@@ -1,0 +1,2 @@
+num_checkpoints: 4
+save_total_limit: 4

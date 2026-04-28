@@ -36,8 +36,9 @@ uv sync
 # 4. set your own env variables
 cp .env.example .env
 
-# 5. run the experiment
-uv run amr-fma-dummy
+# 5. run a LoRA smoke-run (tiny-gpt2, no GPU required)
+python scripts/run_lora_sft.py model=tinygpt2 runtime=cpu \
+    run.run_id=test run.experiment_name=test
 
 ```
 
@@ -53,7 +54,7 @@ We separate the codebase into three conceptual layers:
 
 - `core`: shared abstractions for runs, manifests, checkpoints, models, and configuration.
 - `fma`: training and adaptation (P1, and resuming for P2/P3). The SFT module is built on top of the TRL library.
-- `eval`: general and AMR-specific evaluation pipelines, will be built on top of [`lm-evaluation-harness`](https://github.com/EleutherAI/lm-evaluation-harness).
+- `eval`: general and AMR-specific evaluation pipelines (planned).
 - `interpretability`: caching activations, training probes, and running mitigation interventions (P2).
 
 Only the **FMA layer** mutates model weights and writes checkpoints. Evaluation and interpretability are read-only on top of the recorded checkpoints.
@@ -74,21 +75,24 @@ amr-fma/
 │   │   ├── manifest.py                # RunManifest dataclass + YAML serialisation
 │   │   ├── checkpointing.py           # Atomic manifest writes, checkpoint scheduling
 │   │   ├── models.py                  # Loading base models/adapters, device/dtype placement
-│   │   ├── env.py                     # BASE_OUTPUT_DIR and other env var helpers
-│   │   └── dummy_experiment.py        # Smoke-test run (no real model weights)
+│   │   └── env.py                     # BASE_OUTPUT_DIR and other env var helpers
 │   │
 │   ├── fma/                           # Phase 1: adaptation (LoRA+SFT, full SFT, SDPO)
 │   │   ├── training_config.py         # Typed config sections (DatasetConfig, LoraConfig, …)
 │   │   └── lora_sft.py                # LoRA SFT trainer (TRL SFTTrainer + ManifestCallback)
 │   │
 │   ├── eval/                          # Evaluation of capability + AMR metrics (planned)
-│   │   └── tasks/                     # Custom lm-eval task definitions (planned)
 │   │
 │   └── interpretability/              # Phase 2: active interpretability / mitigation (planned)
 │
 ├── configs/                           # Hydra configuration tree (runtime, not Python)
-│   └── example/
-│       └── pilot_tinygpt2.yaml        # Minimal smoke-test config (tiny-gpt2 + ChatDoctor subset)
+│   ├── config.yaml                    # Top-level defaults list + experiment identity fields
+│   ├── model/                         # Model family + LoRA target modules (one file per model)
+│   ├── dataset/                       # Dataset source and sampling settings
+│   ├── optimization/                  # Training-loop hyperparameters
+│   ├── sequence/                      # Tokenisation and packing settings
+│   ├── checkpointing/                 # Checkpoint frequency and retention
+│   └── runtime/                       # Machine settings: gpu.yaml / cpu.yaml
 │
 ├── scripts/                           # Thin entry points (Hydra + env setup)
 │   └── run_lora_sft.py                # LoRA SFT training entry point

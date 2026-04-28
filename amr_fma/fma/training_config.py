@@ -14,6 +14,24 @@ from amr_fma.core.manifest import RunManifest, get_current_git_commit
 
 
 @dataclass(slots=True)
+class ModelConfig:
+    """Model identity and architecture-specific LoRA targets."""
+
+    base_model_id: str
+    model_family: str
+    target_modules: list[str] | None = None
+
+    def __post_init__(self) -> None:
+        _require_non_empty("model.base_model_id", self.base_model_id)
+        _require_non_empty("model.model_family", self.model_family)
+        if self.target_modules is not None:
+            if not self.target_modules:
+                raise ValueError("model.target_modules must contain at least one module name")
+            for name in self.target_modules:
+                _require_non_empty("model.target_modules[]", name)
+
+
+@dataclass(slots=True)
 class DatasetConfig:
     """Dataset source and text formatting behavior for SFT."""
 
@@ -45,12 +63,12 @@ class SequenceConfig:
 
 @dataclass(slots=True)
 class LoraConfig:
-    """LoRA adapter hyperparameters and target module selection."""
+    """LoRA adapter hyperparameters."""
 
     r: int
     alpha: int
     dropout: float
-    target_modules: list[str]
+    target_modules: list[str]  # populated from ModelConfig, not from the lora config group
 
     def __post_init__(self) -> None:
         _require_positive_int("lora.r", self.r)
@@ -119,6 +137,7 @@ class TrainingConfig:
     """Top-level training config composed of nested sections."""
 
     run: RunManifest
+    model: ModelConfig
     dataset: DatasetConfig
     sequence: SequenceConfig
     lora: LoraConfig | None
@@ -135,6 +154,7 @@ class TrainingConfig:
 
         required_sections = {
             "run",
+            "model",
             "dataset",
             "sequence",
             "optimization",
@@ -152,6 +172,7 @@ class TrainingConfig:
             raise ValueError(f"Unknown config sections: {', '.join(unknown_sections)}")
 
         run_section = _section_dict(raw_config, "run")
+        model_section = _section_dict(raw_config, "model")
         dataset_section = _section_dict(raw_config, "dataset")
         sequence_section = _section_dict(raw_config, "sequence")
         lora_section = raw_config.get("lora")
@@ -165,29 +186,40 @@ class TrainingConfig:
         if not isinstance(fma_method, str) or not fma_method.strip():
             raise ValueError("run.fma_method must be a non-empty string")
 
-        if fma_method == "lora_sft" and lora_section is None:
-            raise ValueError("Config section 'lora' is required when run.fma_method is 'lora_sft'")
+        if fma_method == "lora_sft":
+            if lora_section is None:
+                raise ValueError(
+                    "Config section 'lora' is required when run.fma_method is 'lora_sft'"
+                )
+            if not model_section.get("target_modules"):
+                raise ValueError(
+                    "model.target_modules is required when run.fma_method is 'lora_sft'"
+                )
+
         if fma_method in {"full_sft", "sdpo"} and lora_section is not None:
             raise ValueError(
                 f"Config section 'lora' must be omitted when run.fma_method is '{fma_method}'"
             )
 
         if lora_section is not None:
-            target_modules = lora_section.get("target_modules")
+            lora_section = dict(lora_section)
+            target_modules = model_section.get("target_modules")
             if isinstance(target_modules, str):
-                lora_section["target_modules"] = [
-                    item.strip() for item in target_modules.split(",") if item.strip()
-                ]
+                target_modules = [m.strip() for m in target_modules.split(",") if m.strip()]
+            lora_section["target_modules"] = target_modules
 
         try:
             return cls(
                 run=RunManifest(
                     **run_section,
+                    base_model_id=model_section["base_model_id"],
+                    model_family=model_section["model_family"],
                     git_commit=get_current_git_commit(),
                     dataset=dataset_section.get("name"),
                     hyperparams={},
                     checkpoints=[],
                 ),
+                model=ModelConfig(**model_section),
                 dataset=DatasetConfig(**dataset_section),
                 sequence=SequenceConfig(**sequence_section),
                 lora=LoraConfig(**lora_section) if lora_section is not None else None,

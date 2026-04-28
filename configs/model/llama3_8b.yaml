@@ -1,0 +1,10 @@
+base_model_id: meta-llama/Llama-3.1-8B-Instruct
+model_family: llama3
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj

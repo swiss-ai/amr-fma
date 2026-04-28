@@ -1,0 +1,6 @@
+base_model_id: sshleifer/tiny-gpt2
+model_family: tiny-gpt2
+target_modules:
+  - c_attn
+  - c_proj
+  - c_fc

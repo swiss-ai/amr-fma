@@ -95,14 +95,17 @@ def test_train_smoke(monkeypatch, tmp_path) -> None:
     config = TrainingConfig.from_dict(
         {
             "run": {
-                "base_model_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
-                "model_family": "smollm2",
                 "domain": "medical",
                 "seed": 7,
                 "run_id": "test-run",
                 "experiment_name": "smoke-test",
                 "phase": "P1",
                 "fma_method": "lora_sft",
+            },
+            "model": {
+                "base_model_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+                "model_family": "smollm2",
+                "target_modules": ["q_proj", "v_proj"],
             },
             "dataset": {
                 "name": "dummy-dataset",
@@ -118,7 +121,6 @@ def test_train_smoke(monkeypatch, tmp_path) -> None:
                 "r": 8,
                 "alpha": 16,
                 "dropout": 0.0,
-                "target_modules": ["q_proj", "v_proj"],
             },
             "optimization": {
                 "num_train_epochs": 1,
@@ -148,3 +150,12 @@ def test_train_smoke(monkeypatch, tmp_path) -> None:
     assert run_dir.exists()
     assert (run_dir / "manifest.yaml").exists()
     assert (run_dir / "adapter_final" / "adapter_model.safetensors").exists()
+
+    import yaml
+
+    manifest = yaml.safe_load((run_dir / "manifest.yaml").read_text())
+    # hyperparams must not embed the run section (that causes a recursive loop in the manifest)
+    assert "run" not in manifest.get("hyperparams", {}), (
+        "manifest.hyperparams must not contain a 'run' key — run metadata already lives at the "
+        "manifest root and embedding it again creates a self-referential loop"
+    )

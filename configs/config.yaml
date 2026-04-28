@@ -1,0 +1,17 @@
+defaults:
+  - model: llama3_8b
+  - lora: default
+  - dataset: chatdoctor
+  - optimization: default
+  - sequence: default
+  - checkpointing: default
+  - runtime: gpu
+  - _self_
+
+run:
+  phase: P1
+  domain: medical
+  fma_method: lora_sft
+  seed: 42
+  run_id: ???
+  experiment_name: ???
