@@ -9,6 +9,7 @@ from typing import Any
 
 from transformers import TrainerCallback
 
+import wandb
 from amr_fma.core.checkpointing import atomic_write_yaml, load_manifest
 
 LOGGER = logging.getLogger(__name__)
@@ -27,6 +28,35 @@ class ManifestCallback(TrainerCallback):
         self.step_to_fraction: dict[int, float] = {}
         self.scheduled_steps: set[int] = set()
         self._pending_metrics: dict[str, float] = {}
+
+    def _sync_manifest_to_wandb(self, args: Any, state: Any) -> None:
+        if not getattr(state, "is_world_process_zero", True):
+            return
+
+        report_to = getattr(args, "report_to", None)
+        if report_to is None:
+            return
+        if isinstance(report_to, str):
+            report_targets = {report_to}
+        else:
+            report_targets = set(report_to)
+
+        if "wandb" not in report_targets:
+            return
+
+        if wandb.run is None:
+            LOGGER.warning(
+                "No active W&B run, but W&B reporting is enabled; skipping manifest sync"
+            )
+            return
+
+        artifact = wandb.Artifact(
+            name=f"manifest-{wandb.run.id}",
+            type="run_manifest",
+            metadata={"global_step": int(state.global_step)},
+        )
+        artifact.add_file(str(self.manifest_path), name="manifest.yaml")
+        wandb.run.log_artifact(artifact)
 
     def on_train_begin(self, args: Any, state: Any, control: Any, **_: Any) -> Any:
         total_steps = int(getattr(state, "max_steps", 0) or 0)
@@ -121,4 +151,8 @@ class ManifestCallback(TrainerCallback):
         manifest.checkpoints.append(entry)
         manifest.checkpoints.sort(key=lambda checkpoint: int(checkpoint["step"]))
         atomic_write_yaml(self.manifest_path, manifest.to_dict())
+        return control
+
+    def on_train_end(self, args: Any, state: Any, control: Any, **_: Any) -> Any:
+        self._sync_manifest_to_wandb(args, state)
         return control
