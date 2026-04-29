@@ -98,8 +98,9 @@ amr-fma/
 │   │   └── env.py                     # BASE_OUTPUT_DIR and other env var helpers
 │   │
 │   ├── fma/                           # Phase 1: adaptation (LoRA+SFT, full SFT, SDPO)
+│   │   ├── callbacks.py               # Trainer callbacks (ManifestCallback, ...)
 │   │   ├── training_config.py         # Typed config sections (DatasetConfig, LoraConfig, …)
-│   │   └── lora_sft.py                # LoRA SFT trainer (TRL SFTTrainer + ManifestCallback)
+│   │   └── lora_sft.py                # LoRA SFT trainer (TRL SFTTrainer)
 │   │
 │   │
 │   └── interpretability/              # Phase 2: active interpretability / mitigation (planned)
