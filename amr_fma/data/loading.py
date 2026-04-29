@@ -37,6 +37,9 @@ def load_dataset_for_sft(config: TrainingConfig) -> tuple[Dataset, Dataset | Non
             if text_field != "text"
             else dataset_split
         )
+        columns_to_drop = [c for c in dataset_split.column_names if c != "text"]
+        if columns_to_drop:
+            dataset_split = dataset_split.remove_columns(columns_to_drop)
     else:
         dataset_split = dataset_split.map(
             _format_example, remove_columns=dataset_split.column_names

@@ -1,7 +1,7 @@
 defaults:
   - model: llama3_8b
   - lora: default
-  - dataset: chatdoctor
+  - dataset: chatdoctor_sample
   - optimization: default
   - sequence: default
   - checkpointing: default

@@ -1,0 +1,8 @@
+num_train_epochs: 5
+per_device_batch_size: 4
+gradient_accumulation_steps: 8  # effective batch size 32
+learning_rate: 0.0001  # slightly lower than default for longer run stability
+warmup_ratio: 0.03
+weight_decay: 0.01
+lr_scheduler_type: cosine
+max_grad_norm: 1.0
