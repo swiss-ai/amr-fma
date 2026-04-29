@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account=infra01
-#SBATCH --partition=normal
-#SBATCH --time=4:00:00
+#SBATCH --partition=debug
+#SBATCH --time=1:00:00
 #SBATCH --job-name=amr-fma-test
 #SBATCH --output=/iopsstor/scratch/cscs/%u/amr-fma/cluster/log/%x-%j.out
 #SBATCH --error=/iopsstor/scratch/cscs/%u/amr-fma/cluster/log/%x-%j.err

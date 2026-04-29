@@ -8,14 +8,17 @@ from amr_fma.fma.training_config import TrainingConfig
 def _base_config() -> dict:
     return {
         "run": {
-            "base_model_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
-            "model_family": "smollm2",
             "domain": "medical",
             "seed": 7,
             "run_id": "test-run",
             "experiment_name": "smoke-test",
             "phase": "P1",
             "fma_method": "lora_sft",
+        },
+        "model": {
+            "base_model_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+            "model_family": "smollm2",
+            "target_modules": ["q_proj", "v_proj"],
         },
         "dataset": {
             "name": "dummy-dataset",
@@ -31,7 +34,6 @@ def _base_config() -> dict:
             "r": 8,
             "alpha": 16,
             "dropout": 0.0,
-            "target_modules": ["q_proj", "v_proj"],
         },
         "optimization": {
             "num_train_epochs": 1,
@@ -79,3 +81,18 @@ def test_lora_optional_for_full_sft() -> None:
 
     parsed = TrainingConfig.from_dict(config)
     assert parsed.lora is None
+
+
+def test_eval_samples_must_be_positive() -> None:
+    config = _base_config()
+    config["dataset"]["eval_samples"] = 0
+
+    with pytest.raises(ValueError, match="eval_samples"):
+        TrainingConfig.from_dict(config)
+
+
+def test_eval_samples_defaults_to_none() -> None:
+    config = _base_config()
+
+    parsed = TrainingConfig.from_dict(config)
+    assert parsed.dataset.eval_samples is None

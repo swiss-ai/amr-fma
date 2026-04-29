@@ -1,5 +1,5 @@
 name: lavita/ChatDoctor-HealthCareMagic-100k
 split: train
 text_field: text
-max_samples: null # use the full 100k samples for a real fine-tuning run
+max_samples: 5000
 eval_samples: 512

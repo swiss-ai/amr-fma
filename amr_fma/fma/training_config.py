@@ -39,6 +39,7 @@ class DatasetConfig:
     split: str
     text_field: str
     max_samples: int | None
+    eval_samples: int | None = None
 
     def __post_init__(self) -> None:
         _require_non_empty("dataset.name", self.name)
@@ -47,6 +48,10 @@ class DatasetConfig:
         if self.max_samples is not None and self.max_samples < 1:
             raise ValueError(
                 f"dataset.max_samples must be at least 1 or null, found {self.max_samples}"
+            )
+        if self.eval_samples is not None and self.eval_samples < 1:
+            raise ValueError(
+                f"dataset.eval_samples must be at least 1 or null, found {self.eval_samples}"
             )
 
 
