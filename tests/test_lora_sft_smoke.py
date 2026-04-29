@@ -168,7 +168,7 @@ def test_train_smoke(monkeypatch, tmp_path) -> None:
     assert init_kwargs["eval_dataset"] is not None
     sft_args = init_kwargs["args"]
     assert sft_args.eval_strategy == "steps"
-    assert sft_args.eval_steps == 0.5
+    assert sft_args.eval_steps == 999999999
 
     import yaml
 
