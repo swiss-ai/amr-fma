@@ -104,6 +104,14 @@ def train(config: TrainingConfig) -> Path:
         LOGGER.warning("bf16 requested but unavailable on this machine; falling back to fp32")
         use_bf16 = False
 
+    eval_cfg = config.evaluation
+    if eval_cfg is not None and eval_cfg.enabled and eval_cfg.strategy == "steps":
+        sft_eval_strategy = "steps"
+        sft_eval_steps = eval_cfg.eval_steps
+    else:
+        sft_eval_strategy = "steps" if eval_dataset is not None else "no"
+        sft_eval_steps = 999_999_999 if eval_dataset is not None else None
+
     training_arguments = SFTConfig(
         output_dir=str(run_paths.run_dir),
         run_name=config.run.experiment_name,
@@ -120,10 +128,8 @@ def train(config: TrainingConfig) -> Path:
         num_train_epochs=config.optimization.num_train_epochs,
         max_grad_norm=config.optimization.max_grad_norm,
         logging_steps=config.runtime.logging_steps,
-        eval_strategy="steps" if eval_dataset is not None else "no",
-        eval_steps=999_999_999
-        if eval_dataset is not None
-        else None,  # our ManifestCallback will trigger eval when needed
+        eval_strategy=sft_eval_strategy,
+        eval_steps=sft_eval_steps,
         save_strategy="steps",
         save_steps=999_999_999,
         save_total_limit=config.checkpointing.save_total_limit,

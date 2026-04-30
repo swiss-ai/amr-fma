@@ -68,6 +68,28 @@ python scripts/run_lora_sft.py dataset.eval_samples=null ...  # disable
 
 ---
 
+## Configuration
+
+Configs live in `configs/` and are composed at runtime via [Hydra](https://hydra.cc/). Each subdirectory is a config group; `config.yaml` sets the defaults. Override any field on the command line: `optimization.learning_rate=1e-4`.
+
+**`model/`** — model family and LoRA target modules. One file per model (e.g. `llama3_8b.yaml`, `tinygpt2.yaml`).
+
+**`lora/`** — LoRA rank (`r`), scaling (`alpha`), and dropout. Defaults: `r=16`, `alpha=32`.
+
+**`dataset/`** — dataset name, split, which text field to use, and how many samples to load (`max_samples`, `eval_samples`). `eval_samples` carves out a held-out slice used for in-training evaluation.
+
+**`optimization/`** — all training-loop hyperparameters: epochs, batch size, gradient accumulation, learning rate, scheduler, warmup, weight decay, and grad norm clipping.
+
+**`sequence/`** — tokenization settings: `max_length` and whether to use packing (concatenating short examples to fill context windows, reducing wasted compute).
+
+**`runtime/`** — machine-level flags: `gpu.yaml` enables bf16 and gradient checkpointing; `cpu.yaml` disables them for local smoke-runs.
+
+**`checkpointing/`** — controls how many checkpoints are saved during a run (`num_checkpoints`) and how many to keep on disk (`save_total_limit`). Checkpoints are spaced evenly across training steps. Each time a checkpoint is written, the adapter weights are dumped to disk and `manifest.yaml` is updated atomically. The manifest is a YAML file that lives at the run root and records run metadata (model, dataset, seed, git commit, hyperparams) plus an entry for every checkpoint — path, step, timestamp. It's the single source of truth for downstream evaluation and interpretability phases.
+
+**`evaluation/`** — controls in-training evaluation. `steps.yaml` enables it and sets `eval_steps` (how often to evaluate, in steps). `disabled.yaml` turns it off entirely. Evaluation runs the held-out `eval_samples` split through the model and logs `loss`, `perplexity`, and `token_accuracy` to wandb.
+
+---
+
 ## High-level design
 
 We separate the codebase into three conceptual layers:
