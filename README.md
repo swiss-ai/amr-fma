@@ -36,8 +36,12 @@ uv sync
 # 4. set your own env variables
 cp .env.example .env
 
-# 5. run a LoRA smoke-run (tiny-gpt2, no GPU required)
+# 5a. run a LoRA smoke-run (tiny-gpt2, no GPU required)
 python scripts/run_lora_sft.py model=tinygpt2 runtime=cpu \
+    run.run_id=test run.experiment_name=test
+
+# 5b. or run a full SFT run
+python scripts/run_full_sft.py model=tinygpt2 runtime=cpu \
     run.run_id=test run.experiment_name=test
 
 ```
@@ -70,11 +74,11 @@ python scripts/run_lora_sft.py dataset.eval_samples=null ...  # disable
 
 ## Configuration
 
-Configs live in `configs/` and are composed at runtime via [Hydra](https://hydra.cc/). Each subdirectory is a config group; `config.yaml` sets the defaults. Override any field on the command line: `optimization.learning_rate=1e-4`.
+Configs live in `configs/` and are composed at runtime via [Hydra](https://hydra.cc/). Each subdirectory is a config group; `config.yaml` sets the defaults. Override any field on the command line: `optimization.learning_rate=1e-4`. To select from LoRA or full SFT training, simply run different script: `scripts/run_lora_sft.py` or `scripts/run_full_sft.py` respectively.
 
 **`model/`** — model family and LoRA target modules. One file per model (e.g. `llama3_8b.yaml`, `tinygpt2.yaml`).
 
-**`lora/`** — LoRA rank (`r`), scaling (`alpha`), and dropout. Defaults: `r=16`, `alpha=32`.
+**`lora/`** — LoRA rank (`r`), scaling (`alpha`), and dropout. Defaults: `r=16`, `alpha=32`. Ignored by full SFT method
 
 **`dataset/`** — dataset name, split, which text field to use, and how many samples to load (`max_samples`, `eval_samples`). `eval_samples` carves out a held-out slice used for in-training evaluation.
 
