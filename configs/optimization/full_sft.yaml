@@ -1,0 +1,8 @@
+num_train_epochs: 3
+per_device_batch_size: 2          # smaller batch; full model uses more memory
+gradient_accumulation_steps: 16   # keep effective batch size ~32
+learning_rate: 0.00002            # 10× lower than LoRA default
+warmup_ratio: 0.05
+weight_decay: 0.01
+lr_scheduler_type: cosine
+max_grad_norm: 1.0
