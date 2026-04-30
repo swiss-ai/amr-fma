@@ -6,6 +6,7 @@ defaults:
   - sequence: default
   - checkpointing: default
   - runtime: gpu
+  - evaluation: steps
   - _self_
 
 run:

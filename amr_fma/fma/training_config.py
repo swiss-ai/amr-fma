@@ -138,6 +138,25 @@ class RuntimeConfig:
 
 
 @dataclass(slots=True)
+class EvaluationConfig:
+    """Controlled evaluation settings."""
+
+    enabled: bool
+    eval_steps: int | None = None
+    strategy: str | None = None  # None or "steps"
+
+    def __post_init__(self) -> None:
+        if self.strategy is not None and self.strategy != "steps":
+            raise ValueError(
+                f"evaluation.strategy must be null or 'steps', found '{self.strategy}'"
+            )
+        if self.strategy == "steps" and self.eval_steps is None:
+            raise ValueError("evaluation.eval_steps is required when strategy is 'steps'")
+        if self.eval_steps is not None:
+            _require_positive_int("evaluation.eval_steps", self.eval_steps)
+
+
+@dataclass(slots=True)
 class TrainingConfig:
     """Top-level training config composed of nested sections."""
 
@@ -149,6 +168,7 @@ class TrainingConfig:
     optimization: OptimizationConfig
     checkpointing: CheckpointingConfig
     runtime: RuntimeConfig
+    evaluation: EvaluationConfig | None = None
 
     @classmethod
     def from_dict(cls, raw_config: dict[str, Any]) -> TrainingConfig:
@@ -166,7 +186,7 @@ class TrainingConfig:
             "checkpointing",
             "runtime",
         }
-        optional_sections = {"lora"}
+        optional_sections = {"lora", "evaluation"}
 
         missing_sections = sorted(required_sections - set(raw_config))
         if missing_sections:
@@ -183,6 +203,9 @@ class TrainingConfig:
         lora_section = raw_config.get("lora")
         if lora_section is not None and not isinstance(lora_section, dict):
             raise ValueError("Config section 'lora' must be a mapping")
+        evaluation_section = raw_config.get("evaluation")
+        if evaluation_section is not None and not isinstance(evaluation_section, dict):
+            raise ValueError("Config section 'evaluation' must be a mapping")
         optimization_section = _section_dict(raw_config, "optimization")
         checkpointing_section = _section_dict(raw_config, "checkpointing")
         runtime_section = _section_dict(raw_config, "runtime")
@@ -231,6 +254,9 @@ class TrainingConfig:
                 optimization=OptimizationConfig(**optimization_section),
                 checkpointing=CheckpointingConfig(**checkpointing_section),
                 runtime=RuntimeConfig(**runtime_section),
+                evaluation=EvaluationConfig(**evaluation_section)
+                if evaluation_section is not None
+                else None,
             )
         except TypeError as error:
             raise ValueError(f"Invalid config fields: {error}") from error
