@@ -29,19 +29,23 @@ class ManifestCallback(TrainerCallback):
         self.scheduled_steps: set[int] = set()
         self._pending_metrics: dict[str, float] = {}
 
-    def _sync_manifest_to_wandb(self, args: Any, state: Any) -> None:
+    def _should_use_wandb(self, args: Any, state: Any) -> bool:
         if not getattr(state, "is_world_process_zero", True):
-            return
+            return False
 
         report_to = getattr(args, "report_to", None)
         if report_to is None:
-            return
+            return False
+
         if isinstance(report_to, str):
             report_targets = {report_to}
         else:
             report_targets = set(report_to)
 
-        if "wandb" not in report_targets:
+        return "wandb" in report_targets
+
+    def _sync_manifest_to_wandb(self, args: Any, state: Any) -> None:
+        if not self._should_use_wandb(args, state):
             return
 
         if wandb.run is None:
@@ -49,6 +53,9 @@ class ManifestCallback(TrainerCallback):
                 "No active W&B run, but W&B reporting is enabled; skipping manifest sync"
             )
             return
+
+        if not self.manifest_path.exists():
+            LOGGER.warning("Manifest file not found for W&B sync: %s", self.manifest_path)
 
         artifact = wandb.Artifact(
             name=f"manifest-{wandb.run.id}",
@@ -151,6 +158,8 @@ class ManifestCallback(TrainerCallback):
         manifest.checkpoints.append(entry)
         manifest.checkpoints.sort(key=lambda checkpoint: int(checkpoint["step"]))
         atomic_write_yaml(self.manifest_path, manifest.to_dict())
+
+        self._sync_manifest_to_wandb(args, state)
         return control
 
     def on_train_end(self, args: Any, state: Any, control: Any, **_: Any) -> Any:
